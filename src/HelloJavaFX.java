@@ -15,7 +15,7 @@ public class HelloJavaFX extends Application {
         StackPane root = new StackPane();
         root.getChildren().add(btn);
 
-        Scene scene = new Scene(root, 300, 200);
+        Scene scene = new Scene(root, 1080, 640);
         primaryStage.setScene(scene);
         primaryStage.show();
     }
