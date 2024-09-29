@@ -1,0 +1,61 @@
+/* styles.css */
+
+/* General layout styles */
+.root {
+    -fx-background-color: #ff8000;
+    -fx-font-family: 'Segoe UI', sans-serif;
+}
+
+/* Header styling */
+#header {
+    -fx-background-color: #075E54;
+    -fx-text-fill: white;
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-padding: 10px;
+}
+
+/* Contacts list styling */
+#contacts-list {
+    -fx-background-color: #f8f9fa;
+    -fx-border-color: #d1d1d1;
+}
+
+#contacts-list .list-cell {
+    -fx-padding: 10px;
+    -fx-background-color: #f8f9fa;
+}
+
+#contacts-list .list-cell:hover {
+    -fx-background-color: #ebebeb;
+}
+
+/* Chat area styling */
+#chat-area {
+    -fx-background-color: white;
+    -fx-padding: 10px;
+    -fx-border-color: #d1d1d1;
+    -fx-border-width: 1px;
+    -fx-border-radius: 5px;
+}
+
+/* Message input box */
+#message-input {
+    -fx-border-color: #d1d1d1;
+    -fx-background-color: #f8f9fa;
+    -fx-padding: 8px;
+    -fx-border-radius: 5px;
+}
+
+/* Send button styling */
+#send-button {
+    -fx-background-color: #25D366;
+    -fx-text-fill: white;
+    -fx-border-radius: 5px;
+    -fx-font-weight: bold;
+}
+
+#send-button:hover {
+    -fx-background-color: #128C7E;
+}
+
