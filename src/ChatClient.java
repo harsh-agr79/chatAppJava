@@ -1,11 +1,10 @@
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
-import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.layout.*;
-import javafx.scene.text.TextAlignment;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
 import java.io.*;
@@ -20,7 +19,7 @@ public class ChatClient extends Application {
     private PrintWriter out;
     private BufferedReader in;
 
-    private VBox chatDisplay; // Replaces chatArea TextArea
+    private TextArea chatArea;
     private TextField messageInput;
     private ListView<String> userListView;
     private ListView<String> groupListView;
@@ -40,27 +39,25 @@ public class ChatClient extends Application {
 
     @Override
     public void start(Stage primaryStage) {
-        // Root layout
-        BorderPane root = new BorderPane();
-        root.getStyleClass().add("root"); // Assign style class to root
+        // Initialize the UI components first
+        VBox root = new VBox(10);
+        root.setPadding(new Insets(10));
 
-        // Header
-        // Label header = new Label("Chat Client");
-        // header.setId("header"); // Assign ID for header styling
-        // BorderPane.setAlignment(header, Pos.CENTER);
-        // root.setTop(header);
+        chatArea = new TextArea();
+        chatArea.setEditable(false);
+        chatArea.setPrefHeight(300);
 
-        // Sidebar for Users and Groups
-        VBox sidebar = new VBox(20);
-        sidebar.setId("sidebar"); // Assign ID for sidebar styling
-        sidebar.setPadding(new Insets(10, 10, 10, 10));
-        sidebar.setPrefWidth(200); // Set fixed width as per CSS
+        messageInput = new TextField();
+        messageInput.setPrefWidth(300);
 
-        // Users List
-        Label usersLabel = new Label("Users");
+        Button sendButton = new Button("Send");
+        sendButton.setOnAction(e -> sendMessage());
+
+        HBox messageBox = new HBox(10, messageInput, sendButton);
+
         userListView = new ListView<>();
-        userListView.setId("contacts-list"); // Assign ID for contacts list styling
-        userListView.setPrefWidth(180); // Adjusted width as per CSS
+        userListView.setPrefWidth(150);
+        userListView.setPrefHeight(150);
         userListView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
         userListView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue != null) {
@@ -70,11 +67,9 @@ public class ChatClient extends Application {
             }
         });
 
-        // Groups List
-        Label groupsLabel = new Label("Groups");
         groupListView = new ListView<>();
-        groupListView.setId("groups-list"); // Assign ID for groups list styling
-        groupListView.setPrefWidth(180); // Adjusted width as per CSS
+        groupListView.setPrefWidth(150);
+        groupListView.setPrefHeight(150);
         groupListView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
         groupListView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue != null) {
@@ -84,86 +79,28 @@ public class ChatClient extends Application {
             }
         });
 
-        // Group Control Buttons
-        Button createGroupButton = new Button("Create");
-        Button joinGroupButton = new Button("Join");
-        Button leaveGroupButton = new Button("Leave");
-
-        // Assign style classes for group buttons
-        createGroupButton.getStyleClass().add("button");
-        joinGroupButton.getStyleClass().add("button");
-        leaveGroupButton.getStyleClass().add("button");
-
-        // Alternatively, use style classes for multiple buttons
-        HBox groupButtons = new HBox(10, createGroupButton, joinGroupButton, leaveGroupButton);
-        groupButtons.setAlignment(Pos.CENTER_LEFT);
-        groupButtons.getStyleClass().add("group-buttons"); // Assign style class for group buttons
-
-        // Set actions for group buttons
+        Button createGroupButton = new Button("Create Group");
         createGroupButton.setOnAction(e -> createGroup());
+
+        Button joinGroupButton = new Button("Join Group");
         joinGroupButton.setOnAction(e -> joinGroup());
+
+        Button leaveGroupButton = new Button("Leave Group");
         leaveGroupButton.setOnAction(e -> leaveGroup());
 
-        // Assemble Sidebar
-        sidebar.getChildren().addAll(
-                usersLabel,
-                userListView,
-                groupsLabel,
-                groupListView,
-                groupButtons
-        );
+        HBox groupControls = new HBox(10, createGroupButton, joinGroupButton, leaveGroupButton);
 
-        // Chat Area
-        VBox chatContainer = new VBox(10);
-        chatContainer.setId("chat-container"); // Assign ID for chat container styling
-        chatContainer.setPadding(new Insets(10, 10, 10, 10));
-        chatContainer.setPrefWidth(700); // Set fixed width as per CSS
+        VBox userGroupBox = new VBox(10, new Label("Users"), userListView, new Label("Groups"), groupListView, groupControls);
 
-        // Chat Display Area using ScrollPane and VBox
-        ScrollPane scrollPane = new ScrollPane();
-        scrollPane.setId("chat-display"); // Assign ID for chat display styling
-        scrollPane.setFitToWidth(true);
-        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.ALWAYS);
+        root.getChildren().addAll(chatArea, messageBox, userGroupBox);
 
-        chatDisplay = new VBox(10);
-        chatDisplay.setPadding(new Insets(10));
-        chatDisplay.setAlignment(Pos.TOP_LEFT);
-
-        scrollPane.setContent(chatDisplay);
-
-        // Message Input and Send Button
-        HBox messageBox = new HBox(10);
-        messageBox.setAlignment(Pos.CENTER_LEFT);
-
-        messageInput = new TextField();
-        messageInput.setId("message-input"); // Assign ID for message input styling
-        messageInput.setPromptText("Type your message here...");
-        messageInput.setPrefWidth(600); // Adjusted width as per CSS
-        HBox.setHgrow(messageInput, Priority.ALWAYS);
-
-        Button sendButton = new Button("Send");
-        sendButton.setId("send-button"); // Assign ID for send button styling
-        sendButton.setOnAction(e -> sendMessage());
-
-        messageBox.getChildren().addAll(messageInput, sendButton);
-
-        // Assemble Chat Container
-        chatContainer.getChildren().addAll(scrollPane, messageBox);
-        VBox.setVgrow(scrollPane, Priority.ALWAYS);
-
-        // Set Sidebar and Chat Area in the Root Layout
-        root.setLeft(sidebar);
-        root.setCenter(chatContainer);
-
-        // Scene and Stage setup
-        Scene scene = new Scene(root, 900, 600);
-        scene.getStylesheets().add(getClass().getResource("/styles.css").toExternalForm()); // Add CSS to scene
+        Scene scene = new Scene(root, 600, 500);
         primaryStage.setScene(scene);
         primaryStage.setTitle("Chat Client");
         primaryStage.show();
 
-        // Connect to server
-        connectToServer("10.106.87.74", 8000); // Replace with your server's IP address
+        // Now connect to the server and start the listener thread
+        connectToServer("10.106.87.74", 8000); // Use your server's IP address here
     }
 
     private void connectToServer(String hostname, int port) {
@@ -176,7 +113,7 @@ public class ChatClient extends Application {
             clientName = promptClientName();
             out.println(clientName); // Send the client's name to the server
 
-            // Start a thread to listen to messages from the server
+            // Start a thread to listen to messages from the server AFTER UI is initialized
             new Thread(new Listener()).start();
 
         } catch (IOException e) {
@@ -188,82 +125,73 @@ public class ChatClient extends Application {
     private String promptClientName() {
         TextInputDialog nameDialog = new TextInputDialog("YourName");
         nameDialog.setHeaderText("Enter your name");
-        nameDialog.setTitle("Username");
-        nameDialog.setContentText("Please enter your name:");
         return nameDialog.showAndWait().orElse("Anonymous");
     }
 
-    private void sendMessage() {
-        String message = messageInput.getText();
-        if (!message.isEmpty()) {
-            if (currentChatType != null && currentChatName != null) {
-                if (currentChatType.equals("user")) {
-                    // Send a private message
-                    out.println("Private to " + currentChatName + ": " + message);
-                    appendMessage("You: " + message, true);  // Indicate sent message
-                } else if (currentChatType.equals("group")) {
-                    // Send a group message
-                    out.println("Group " + currentChatName + ": " + message);
-                    appendMessage("You: " + message, true);  // Indicate sent message
-                }
-            } else {
-                // Broadcast message
-                out.println(message);
-                appendMessage("You: " + message, true);
+   private void sendMessage() {
+    String message = messageInput.getText();
+    if (!message.isEmpty()) {
+        if (currentChatType != null && currentChatName != null) {
+            if (currentChatType.equals("user")) {
+                // Send a private message
+                out.println("Private to " + currentChatName + ": " + message);
+                appendToUserChat(currentChatName, message, true);  // Just "You: message"
+            } else if (currentChatType.equals("group")) {
+                // Send a group message
+                out.println("Group " + currentChatName + ": " + message);
+                appendToGroupChat(currentChatName, message, true);  // Just "You: message"
             }
-            messageInput.clear();
+        } else {
+            // Broadcast message
+            out.println(message);
+            chatArea.appendText("You: " + message + "\n");
         }
+        messageInput.clear();
     }
+}
 
-    /**
-     * Appends a message to the chat display area.
-     *
-     * @param message The message text.
-     * @param isSent  True if the message is sent by the user, false if received.
-     */
-    private void appendMessage(String message, boolean isSent) {
-    HBox messageBox = new HBox();
-    messageBox.setPadding(new Insets(5, 10, 5, 10));
-    messageBox.setMaxWidth(chatDisplay.getWidth() - 20); // Prevent overflow
+    private void appendToUserChat(String userName, String message, boolean isSent) {
+    StringBuilder chatHistory = userChats.computeIfAbsent(userName, k -> new StringBuilder());
+    
+    String formattedMessage = isSent
+            ? "You: " + message // Fix the formatting for sent messages
+            : userName + ": " + message;
 
-    Label messageLabel = new Label(message);
-    messageLabel.setWrapText(true);
-    messageLabel.getStyleClass().add("message-label");
+    chatHistory.append(formattedMessage).append("\n");
+    System.out.println("Appended to " + userName + "'s chat: " + formattedMessage); // Debug statement
 
-    // Adjust the alignment and padding for sent and received messages
-    if (isSent) {
-        messageBox.setAlignment(Pos.CENTER_RIGHT);
-        messageBox.setPadding(new Insets(5, 50, 5, 10)); // Extra padding on left for sent messages
-        messageLabel.getStyleClass().add("message-sent");
-    } else {
-        messageBox.setAlignment(Pos.CENTER_LEFT);
-        messageBox.setPadding(new Insets(5, 10, 5, 50)); // Extra padding on right for received messages
-        messageLabel.getStyleClass().add("message-received");
+    if (currentChatType != null && currentChatType.equals("user") && currentChatName.equals(userName)) {
+        Platform.runLater(() -> chatArea.appendText(formattedMessage + "\n"));
     }
+}
 
-    messageBox.getChildren().add(messageLabel);
-    chatDisplay.getChildren().add(messageBox);
 
-    // Scroll to the bottom after adding a message
-    Platform.runLater(() -> {
-        ScrollPane scrollPane = (ScrollPane) chatDisplay.getParent();
-        scrollPane.setVvalue(1.0);
-    });
+private void appendToGroupChat(String groupName, String message, boolean isSent) {
+    StringBuilder chatHistory = groupChats.computeIfAbsent(groupName, k -> new StringBuilder());
+    
+    String formattedMessage = isSent
+            ? "You: " + message // Fix the formatting for sent messages
+            : "[" + groupName + "] " + message;
+
+    chatHistory.append(formattedMessage).append("\n");
+    System.out.println("Appended to " + groupName + " chat: " + formattedMessage); // Debug statement
+
+    if (currentChatType != null && currentChatType.equals("group") && currentChatName.equals(groupName)) {
+        Platform.runLater(() -> chatArea.appendText(formattedMessage + "\n"));
+    }
 }
 
 
 
     private void createGroup() {
         TextInputDialog groupDialog = new TextInputDialog();
-        groupDialog.setHeaderText("Create New Group");
-        groupDialog.setTitle("Create Group");
-        groupDialog.setContentText("Enter group name:");
+        groupDialog.setHeaderText("Enter group name");
         String groupName = groupDialog.showAndWait().orElse(null);
 
-        if (groupName != null && !groupName.trim().isEmpty()) {
-            out.println("/group create " + groupName.trim());
+        if (groupName != null && !groupName.isEmpty()) {
+            out.println("/group create " + groupName);
         } else {
-            appendMessage("Group name cannot be empty.", true);
+            chatArea.appendText("Group name cannot be empty.\n");
         }
     }
 
@@ -272,9 +200,9 @@ public class ChatClient extends Application {
         if (groupName != null) {
             out.println("/group join " + groupName);
             groupChats.putIfAbsent(groupName, new StringBuilder());
-            appendMessage("You joined group: " + groupName, true);
+            chatArea.appendText("You joined group: " + groupName + "\n");
         } else {
-            appendMessage("No group selected to join.", true);
+            chatArea.appendText("No group selected to join.\n");
         }
     }
 
@@ -282,36 +210,22 @@ public class ChatClient extends Application {
         String groupName = groupListView.getSelectionModel().getSelectedItem();
         if (groupName != null) {
             out.println("/group leave " + groupName);
-            appendMessage("You left group: " + groupName, true);
+            chatArea.appendText("You left group: " + groupName + "\n");
         } else {
-            appendMessage("No group selected to leave.", true);
+            chatArea.appendText("No group selected to leave.\n");
         }
     }
 
     private void displayUserChat(String userName) {
-        chatDisplay.getChildren().clear();
+        chatArea.clear();
         StringBuilder chatHistory = userChats.getOrDefault(userName, new StringBuilder());
-        String[] messages = chatHistory.toString().split("\n");
-        for (String msg : messages) {
-            if (msg.startsWith("You: ")) {
-                appendMessage(msg, true);
-            } else {
-                appendMessage(msg, false);
-            }
-        }
+        chatArea.appendText(chatHistory.toString());
     }
 
     private void displayGroupChat(String groupName) {
-        chatDisplay.getChildren().clear();
+        chatArea.clear();
         StringBuilder chatHistory = groupChats.getOrDefault(groupName, new StringBuilder());
-        String[] messages = chatHistory.toString().split("\n");
-        for (String msg : messages) {
-            if (msg.startsWith("You: ")) {
-                appendMessage(msg, true);
-            } else {
-                appendMessage(msg, false);
-            }
-        }
+        chatArea.appendText(chatHistory.toString());
     }
 
     private void updateUserListView() {
@@ -326,7 +240,6 @@ public class ChatClient extends Application {
         Platform.runLater(() -> {
             Alert alert = new Alert(Alert.AlertType.ERROR);
             alert.setTitle(title);
-            alert.setHeaderText(null);
             alert.setContentText(content);
             alert.showAndWait();
         });
@@ -339,7 +252,7 @@ public class ChatClient extends Application {
                 String serverMessage;
                 while ((serverMessage = in.readLine()) != null) {
                     final String message = serverMessage;
-                    System.out.println("Server: " + message);
+                    System.out.println(message);
                     Platform.runLater(() -> {
                         if (message.startsWith("/userlist")) {
                             updateUserList(message);
@@ -350,13 +263,12 @@ public class ChatClient extends Application {
                         } else if (message.contains(": Group ")) {
                             handleGroupMessage(message);
                         } else {
-                            appendMessage(message, false); // Treat as received message
+                            chatArea.appendText(message + "\n");
                         }
                     });
                 }
             } catch (IOException e) {
                 e.printStackTrace();
-                showErrorDialog("Connection Lost", "The connection to the server was lost.");
             }
         }
     }
@@ -365,9 +277,7 @@ public class ChatClient extends Application {
         String[] userArray = message.substring(10).split(",");
         users.clear();
         for (String user : userArray) {
-            if (!user.trim().isEmpty()) {
-                users.add(user.trim());
-            }
+            users.add(user.trim());
         }
         updateUserListView();
     }
@@ -376,74 +286,74 @@ public class ChatClient extends Application {
         String[] groupArray = message.substring(11).split(",");
         groups.clear();
         for (String group : groupArray) {
-            if (!group.trim().isEmpty()) {
-                groups.add(group.trim());
-            }
+            groups.add(group.trim());
         }
         updateGroupListView();
     }
 
     private void handlePrivateMessage(String message) {
-        System.out.println("Handling private message: " + message);
+    System.out.println("Received message: " + message);
 
-        // Expected format: "Sender: Private to Recipient: Message"
-        int firstColon = message.indexOf(":");
-        if (firstColon == -1) {
-            System.out.println("Invalid private message format.");
-            return;
-        }
-        String sender = message.substring(0, firstColon).trim();
-
-        int secondColon = message.indexOf(":", firstColon + 1);
-        if (secondColon == -1) {
-            System.out.println("Invalid private message format.");
-            return;
-        }
-
-        String actualMessage = message.substring(secondColon + 1).trim();
-
-        // Store and display the message
-        appendMessage(sender + ": " + actualMessage, false);
-
-        // If the current chat is with the sender, display the message
-        if ("user".equals(currentChatType) && sender.equals(currentChatName)) {
-            // Already appended in appendMessage
-        }
+    // Extract the sender before the first colon (i.e., "hello")
+    int senderEndIndex = message.indexOf(":");
+    if (senderEndIndex == -1) {
+        System.out.println("Invalid message format: No sender found.");
+        return;
     }
+    
+    String sender = message.substring(0, senderEndIndex).trim();
 
-    private void handleGroupMessage(String message) {
-        System.out.println("Handling group message: " + message);
-
-        // Expected format: "Sender: Group GroupName: Message"
-        int firstColon = message.indexOf(":");
-        if (firstColon == -1) {
-            System.out.println("Invalid group message format.");
-            return;
-        }
-        String sender = message.substring(0, firstColon).trim();
-
-        int groupKeywordIndex = message.indexOf("Group ", firstColon + 1);
-        if (groupKeywordIndex == -1) {
-            System.out.println("Invalid group message format: 'Group ' keyword missing.");
-            return;
-        }
-
-        int groupNameStart = groupKeywordIndex + "Group ".length();
-        int secondColon = message.indexOf(":", groupNameStart);
-        if (secondColon == -1) {
-            System.out.println("Invalid group message format: No message found.");
-            return;
-        }
-
-        String groupName = message.substring(groupNameStart, secondColon).trim();
-        String actualMessage = message.substring(secondColon + 1).trim();
-
-        // Store and display the message
-        appendMessage("[" + groupName + "] " + sender + ": " + actualMessage, false);
-
-        // If the current chat is with the group, display the message
-        if ("group".equals(currentChatType) && groupName.equals(currentChatName)) {
-            // Already appended in appendMessage
-        }
+    // Extract the actual message after the second colon (after "Private to <user>:")
+    int messageStartIndex = message.indexOf(":", senderEndIndex + 1); // Find second colon
+    if (messageStartIndex == -1) {
+        System.out.println("Invalid message format: No message found.");
+        return;
     }
+    
+    String actualMessage = message.substring(messageStartIndex + 1).trim();
+
+    // Store the received message in the sender's chat history
+    appendToUserChat(sender, actualMessage, false); // false indicates this is a received message
+
+    // Display the message in the active user chat if the chat matches the sender
+    if (currentChatType.equals("user") && currentChatName.equals(sender)) {
+        // displayUserChat(sender);
+    }
+}
+
+
+
+   private void handleGroupMessage(String message) {
+    System.out.println("Received message: " + message);
+
+    // Extract sender before the first colon (i.e., "dev")
+    int senderEndIndex = message.indexOf(":");
+    if (senderEndIndex == -1) {
+        System.out.println("Invalid message format: No sender found.");
+        return;
+    }
+    String sender = message.substring(0, senderEndIndex).trim();
+
+    // Extract group name after "Group" and before the second colon
+    int groupStartIndex = message.indexOf("Group ") + "Group ".length();
+    int groupEndIndex = message.indexOf(":", groupStartIndex);
+    if (groupEndIndex == -1) {
+        System.out.println("Invalid message format: No group name found.");
+        return;
+    }
+    String group = message.substring(groupStartIndex, groupEndIndex).trim();
+
+    // Extract the actual message after the second colon
+    String actualMessage = message.substring(groupEndIndex + 1).trim();
+
+    // Store the received group message
+    appendToGroupChat(group, sender + ": " + actualMessage, false); // False indicates this is a received message
+
+    // Display the message in the active group chat if the chat matches the group name
+    if (currentChatType.equals("group") && currentChatName.equals(group)) {
+        //displayGroupChat(group);
+    }
+}
+
+
 }
