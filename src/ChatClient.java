@@ -25,11 +25,13 @@ public class ChatClient extends Application {
     private ListView<String> groupListView;
     private Set<String> users = new HashSet<>();
     private Set<String> groups = new HashSet<>();
+    private Set<String> joinedGroups = new HashSet<>();
     private String clientName;
 
     // Maps to store chat histories for users and groups
     private Map<String, StringBuilder> userChats = new HashMap<>();
     private Map<String, StringBuilder> groupChats = new HashMap<>();
+    
     private String currentChatType; // "user" or "group"
     private String currentChatName;  // User or Group name currently in chat
 
@@ -138,8 +140,14 @@ public class ChatClient extends Application {
                 appendToUserChat(currentChatName, message, true);  // Just "You: message"
             } else if (currentChatType.equals("group")) {
                 // Send a group message
-                out.println("Group " + currentChatName + ": " + message);
-                appendToGroupChat(currentChatName, message, true);  // Just "You: message"
+               if (joinedGroups.contains(currentChatName)) {
+                    // Send a group message
+                    out.println("Group " + currentChatName + ": " + message);
+                    appendToGroupChat(currentChatName, message, true);  // Just "You: message"
+                } else {
+                    // Notify the user that they need to join the group
+                    chatArea.appendText("You need to join the group " + currentChatName + " to send messages.\n");
+                }
             }
         } else {
             // Broadcast message
@@ -200,6 +208,10 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
         if (groupName != null) {
             out.println("/group join " + groupName);
             groupChats.putIfAbsent(groupName, new StringBuilder());
+            if (!joinedGroups.contains(groupName)) {
+                joinedGroups.add(groupName);  // Track that the user joined the group
+                // Notify the server about the group join event if needed
+            }
             chatArea.appendText("You joined group: " + groupName + "\n");
         } else {
             chatArea.appendText("No group selected to join.\n");
@@ -223,10 +235,28 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
     }
 
     private void displayGroupChat(String groupName) {
-        chatArea.clear();
-        StringBuilder chatHistory = groupChats.getOrDefault(groupName, new StringBuilder());
-        chatArea.appendText(chatHistory.toString());
+    // Check if the user has joined the group
+    if (!joinedGroups.contains(groupName)) {
+        // Show a message indicating they need to join the group first
+        Platform.runLater(() -> {
+            chatArea.clear();
+            chatArea.appendText("You need to join the group to view messages.");
+        });
+        return;
     }
+
+    // If the user is part of the group, display the chat
+    StringBuilder chatHistory = groupChats.getOrDefault(groupName, new StringBuilder());
+    
+    currentChatType = "group";
+    currentChatName = groupName;
+
+    Platform.runLater(() -> {
+        chatArea.clear();
+        chatArea.appendText(chatHistory.toString());
+    });
+}
+
 
     private void updateUserListView() {
         Platform.runLater(() -> userListView.getItems().setAll(users));
@@ -294,36 +324,46 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
     private void handlePrivateMessage(String message) {
     System.out.println("Received message: " + message);
 
-    // Extract the sender before the first colon (i.e., "hello")
+    // Extract sender before the first colon (i.e., "dev")
     int senderEndIndex = message.indexOf(":");
     if (senderEndIndex == -1) {
         System.out.println("Invalid message format: No sender found.");
         return;
     }
-    
     String sender = message.substring(0, senderEndIndex).trim();
 
-    // Extract the actual message after the second colon (after "Private to <user>:")
-    int messageStartIndex = message.indexOf(":", senderEndIndex + 1); // Find second colon
-    if (messageStartIndex == -1) {
-        System.out.println("Invalid message format: No message found.");
+    // Check if the message follows the "Private to" format
+    String privateMessageIndicator = "Private to ";
+    int privateMessageIndex = message.indexOf(privateMessageIndicator);
+    if (privateMessageIndex == -1) {
+        System.out.println("Invalid message format: No 'Private to' indicator found.");
         return;
     }
-    
-    String actualMessage = message.substring(messageStartIndex + 1).trim();
 
-    // Store the received message in the sender's chat history
-    appendToUserChat(sender, actualMessage, false); // false indicates this is a received message
+    // Extract recipient name (i.e., "hemanth")
+    int recipientStartIndex = privateMessageIndex + privateMessageIndicator.length();
+    int recipientEndIndex = message.indexOf(":", recipientStartIndex);
+    if (recipientEndIndex == -1) {
+        System.out.println("Invalid message format: No recipient found.");
+        return;
+    }
+    String recipient = message.substring(recipientStartIndex, recipientEndIndex).trim();
 
-    // Display the message in the active user chat if the chat matches the sender
+    // Extract the actual message after the second colon
+    String actualMessage = message.substring(recipientEndIndex + 1).trim();
+
+    // Check if the message is for the current user
+    if (recipient.equals(clientName)) {
+        // Store the received message in the sender's chat history
+        appendToUserChat(sender, actualMessage, false); // false indicates this is a received message
+    }
+
+    // If the current chat is with the sender, append to the chat area
     if (currentChatType.equals("user") && currentChatName.equals(sender)) {
         // displayUserChat(sender);
     }
 }
-
-
-
-   private void handleGroupMessage(String message) {
+private void handleGroupMessage(String message) {
     System.out.println("Received message: " + message);
 
     // Extract sender before the first colon (i.e., "dev")
@@ -343,17 +383,22 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
     }
     String group = message.substring(groupStartIndex, groupEndIndex).trim();
 
+    // Ensure the user has joined the group
+    if (!joinedGroups.contains(group)) {
+        System.out.println("User has not joined the group: " + group);
+        return;
+    }
+
     // Extract the actual message after the second colon
     String actualMessage = message.substring(groupEndIndex + 1).trim();
 
     // Store the received group message
-    appendToGroupChat(group, sender + ": " + actualMessage, false); // False indicates this is a received message
+    appendToGroupChat(group, sender + ": " + actualMessage, false);  // False indicates this is a received message
 
     // Display the message in the active group chat if the chat matches the group name
     if (currentChatType.equals("group") && currentChatName.equals(group)) {
-        //displayGroupChat(group);
+        // Update the display of the active chat
+        displayGroupChat(group);
     }
 }
-
-
 }
