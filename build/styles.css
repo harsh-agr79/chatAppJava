@@ -2,49 +2,85 @@
 
 /* General layout styles */
 .root {
-    -fx-background-color: #ff8000;
+    -fx-background-color: #f0f2f5;
     -fx-font-family: 'Segoe UI', sans-serif;
+    -fx-padding: 10px;
 }
 
 /* Header styling */
 #header {
     -fx-background-color: #075E54;
     -fx-text-fill: white;
-    -fx-font-size: 20px;
+    -fx-font-size: 24px;
     -fx-font-weight: bold;
+    -fx-padding: 15px;
+    -fx-alignment: center;
+}
+
+/* Sidebar (Users and Groups) */
+#sidebar {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d1d1d1;
+    -fx-border-width: 0 1px 0 0; /* Right border */
     -fx-padding: 10px;
+    -fx-pref-width: 200px; /* Reduced width */
 }
 
 /* Contacts list styling */
-#contacts-list {
+#contacts-list, #groups-list {
     -fx-background-color: #f8f9fa;
     -fx-border-color: #d1d1d1;
+    -fx-border-width: 1px;
+    -fx-border-radius: 5px;
+    -fx-pref-height: 250px;
+    -fx-pref-width: 180px; /* Adjusted width for list items */
 }
 
-#contacts-list .list-cell {
+#contacts-list .list-cell, #groups-list .list-cell {
     -fx-padding: 10px;
     -fx-background-color: #f8f9fa;
 }
 
-#contacts-list .list-cell:hover {
+#contacts-list .list-cell:hover, #groups-list .list-cell:hover {
     -fx-background-color: #ebebeb;
 }
 
 /* Chat area styling */
-#chat-area {
-    -fx-background-color: white;
+#chat-container {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d1d1d1;
+    -fx-border-width: 1px;
+    -fx-border-radius: 5px;
+    -fx-padding: 10px;
+    -fx-pref-width: 700px; /* Increased width */
+    -fx-pref-height: 500px;
+    -fx-layout: vertical;
+}
+
+/* Chat Display Area */
+#chat-display {
+    -fx-background-color: #f0f2f5;
     -fx-padding: 10px;
     -fx-border-color: #d1d1d1;
     -fx-border-width: 1px;
     -fx-border-radius: 5px;
+    -fx-pref-height: 400px;
+    -fx-font-size: 14px;
+    -fx-font-family: 'Segoe UI', sans-serif;
+    -fx-text-fill: #333333;
+    -fx-wrap-text: true; /* Enable text wrapping */
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
 }
 
 /* Message input box */
 #message-input {
     -fx-border-color: #d1d1d1;
-    -fx-background-color: #f8f9fa;
+    -fx-background-color: #ffffff;
     -fx-padding: 8px;
     -fx-border-radius: 5px;
+    -fx-pref-width: 600px; /* Adjusted width */
+    -fx-font-size: 14px;
 }
 
 /* Send button styling */
@@ -53,9 +89,49 @@
     -fx-text-fill: white;
     -fx-border-radius: 5px;
     -fx-font-weight: bold;
+    -fx-pref-width: 100px; /* Adjusted width */
+    -fx-font-size: 14px;
 }
 
 #send-button:hover {
     -fx-background-color: #128C7E;
 }
 
+/* Group Control Buttons */
+.group-buttons .button {
+    -fx-background-color: #075E54;
+    -fx-text-fill: white;
+    -fx-border-radius: 5px;
+    -fx-font-weight: bold;
+    -fx-pref-width: 120px;
+    -fx-font-size: 12px;
+}
+
+.group-buttons .button:hover {
+    -fx-background-color: #128C7E;
+}
+
+/* Sent Message Styling */
+.message-sent {
+    -fx-background-color: #dcf8c6;
+    -fx-padding: 10px;
+    -fx-border-radius: 10px;
+    -fx-width: 60% !important;
+    -fx-alignment: center-right;
+    -fx-background-radius: 10px 0px 10px 10px;
+}
+
+/* Received Message Styling */
+.message-received {
+    -fx-background-color: #ffffff;
+    -fx-padding: 10px;
+    -fx-border-radius: 10px;
+    -fx-width: 60% !important;
+    -fx-alignment: center-left;
+    -fx-background-radius: 0px 10px 10px 10px;
+}
+
+/* Message Label */
+.message-label {
+    -fx-wrap-text: true;
+}
