@@ -6,6 +6,7 @@ import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javafx.scene.input.KeyCode;
 
 import java.io.*;
 import java.net.Socket;
@@ -41,69 +42,86 @@ public class ChatClient extends Application {
 
     @Override
     public void start(Stage primaryStage) {
-        // Initialize the UI components first
-        VBox root = new VBox(10);
-        root.setPadding(new Insets(10));
+    // Initialize the UI components first
+    VBox chatBox = new VBox(10);
+    chatBox.setPadding(new Insets(10));
 
-        chatArea = new TextArea();
-        chatArea.setEditable(false);
-        chatArea.setPrefHeight(300);
+    chatArea = new TextArea();
+    chatArea.setEditable(false);
 
-        messageInput = new TextField();
-        messageInput.setPrefWidth(300);
+    messageInput = new TextField();
 
-        Button sendButton = new Button("Send");
-        sendButton.setOnAction(e -> sendMessage());
+    messageInput.setOnKeyPressed(event -> {
+        if (event.getCode() == KeyCode.ENTER) {
+            sendMessage();
+            event.consume();  // Prevents adding a new line in the text field
+        }
+    });
 
-        HBox messageBox = new HBox(10, messageInput, sendButton);
+    Button sendButton = new Button("Send");
+    sendButton.setOnAction(e -> sendMessage());
 
-        userListView = new ListView<>();
-        userListView.setPrefWidth(150);
-        userListView.setPrefHeight(150);
-        userListView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
-        userListView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
-            if (newValue != null) {
-                currentChatType = "user";
-                currentChatName = newValue;
-                displayUserChat(newValue);
-            }
-        });
+    HBox messageBox = new HBox(10, messageInput, sendButton);
+    chatBox.getChildren().addAll(chatArea, messageBox);
 
-        groupListView = new ListView<>();
-        groupListView.setPrefWidth(150);
-        groupListView.setPrefHeight(150);
-        groupListView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
-        groupListView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
-            if (newValue != null) {
-                currentChatType = "group";
-                currentChatName = newValue;
-                displayGroupChat(newValue);
-            }
-        });
+    // User and Group lists
+    userListView = new ListView<>();
+    userListView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
+    userListView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+        if (newValue != null) {
+            currentChatType = "user";
+            currentChatName = newValue;
+            displayUserChat(newValue);
+        }
+    });
 
-        Button createGroupButton = new Button("Create Group");
-        createGroupButton.setOnAction(e -> createGroup());
+    groupListView = new ListView<>();
+    groupListView.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
+    groupListView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+        if (newValue != null) {
+            currentChatType = "group";
+            currentChatName = newValue;
+            displayGroupChat(newValue);
+        }
+    });
 
-        Button joinGroupButton = new Button("Join Group");
-        joinGroupButton.setOnAction(e -> joinGroup());
+    Button createGroupButton = new Button("Create Group");
+    createGroupButton.setOnAction(e -> createGroup());
 
-        Button leaveGroupButton = new Button("Leave Group");
-        leaveGroupButton.setOnAction(e -> leaveGroup());
+    Button joinGroupButton = new Button("Join Group");
+    joinGroupButton.setOnAction(e -> joinGroup());
 
-        HBox groupControls = new HBox(10, createGroupButton, joinGroupButton, leaveGroupButton);
+    Button leaveGroupButton = new Button("Leave Group");
+    leaveGroupButton.setOnAction(e -> leaveGroup());
 
-        VBox userGroupBox = new VBox(10, new Label("Users"), userListView, new Label("Groups"), groupListView, groupControls);
+    VBox userGroupBox = new VBox(10, new Label("Users"), userListView, new Label("Groups"), groupListView, createGroupButton, joinGroupButton, leaveGroupButton);
 
-        root.getChildren().addAll(chatArea, messageBox, userGroupBox);
+    // Main layout - split horizontally
+    HBox mainLayout = new HBox(10);
+    mainLayout.setPadding(new Insets(10));
+    mainLayout.getChildren().addAll(userGroupBox, chatBox);
 
-        Scene scene = new Scene(root, 600, 500);
-        primaryStage.setScene(scene);
-        primaryStage.setTitle("Chat Client");
-        primaryStage.show();
+    Scene scene = new Scene(mainLayout, 700, 500);
 
-        // Now connect to the server and start the listener thread
-        connectToServer("10.106.87.74", 8000); // Use your server's IP address here
-    }
+    // Make layout responsive by binding the sizes
+    // Adjust the width of user and group lists based on window size
+    userGroupBox.prefWidthProperty().bind(scene.widthProperty().multiply(0.25)); // 25% of window width
+    userListView.prefHeightProperty().bind(scene.heightProperty().multiply(0.35)); // 35% of window height
+    groupListView.prefHeightProperty().bind(scene.heightProperty().multiply(0.35)); // 35% of window height
+
+    // Bind chat box to take the remaining width and height
+    chatBox.prefWidthProperty().bind(scene.widthProperty().multiply(0.75)); // 75% of window width
+    chatArea.prefHeightProperty().bind(scene.heightProperty().subtract(messageBox.heightProperty()).multiply(0.8)); // Adjust chat area height
+    messageInput.prefWidthProperty().bind(chatBox.widthProperty().subtract(sendButton.widthProperty()).multiply(0.85));
+
+    primaryStage.setScene(scene);
+    primaryStage.setTitle("Chat Client");
+    primaryStage.show();
+
+    // Now connect to the server and start the listener thread
+    connectToServer("10.106.87.74", 8000); // Use your server's IP address here
+}
+
 
     private void connectToServer(String hostname, int port) {
         try {
