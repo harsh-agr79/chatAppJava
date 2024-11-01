@@ -149,7 +149,6 @@ public class ChatClient extends Application {
             // Send login and password to the server
             out.println(login);
             out.println(password);
-
             clientName = login;
 
             // Start a thread to listen to messages from the server AFTER UI is initialized
