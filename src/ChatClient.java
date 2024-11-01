@@ -119,7 +119,7 @@ public class ChatClient extends Application {
     primaryStage.show();
 
     // Now connect to the server and start the listener thread
-    connectToServer("10.106.87.74", 8000); // Use your server's IP address here
+    connectToServer("10.17.235.2", 8000); // Use your server's IP address here
 }
 
 

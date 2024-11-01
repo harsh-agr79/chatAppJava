@@ -12,7 +12,7 @@ public class ChatServer {
         int port = 8000;
 
         // Replace with your local IP address on the WiFi network
-        String localIPAddress = "10.106.87.74";
+        String localIPAddress = "10.17.235.2";
 
         try (ServerSocket serverSocket = new ServerSocket(port, 50, InetAddress.getByName(localIPAddress))) {
             System.out.println("Server is listening on IP " + localIPAddress + " and port " + port);
