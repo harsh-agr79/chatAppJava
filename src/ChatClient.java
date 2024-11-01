@@ -7,6 +7,16 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.scene.input.KeyCode;
+import javafx.util.Pair;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.Label;
+import javafx.scene.control.PasswordField;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.GridPane;
+import javafx.util.Pair;
+import java.util.Optional;
 
 import java.io.*;
 import java.net.Socket;
@@ -129,9 +139,16 @@ public class ChatClient extends Application {
             out = new PrintWriter(socket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-            // Ask for the client's name
-            clientName = promptClientName();
-            out.println(clientName); // Send the client's name to the server
+            // Ask for the client's login and password
+            Pair<String, String> credentials = promptLoginAndPassword();
+            String login = credentials.getKey();
+            String password = credentials.getValue();
+
+            // Send login and password to the server
+            out.println(login);
+            out.println(password);
+
+            clientName = login;
 
             // Start a thread to listen to messages from the server AFTER UI is initialized
             new Thread(new Listener()).start();
@@ -142,10 +159,44 @@ public class ChatClient extends Application {
         }
     }
 
-    private String promptClientName() {
-        TextInputDialog nameDialog = new TextInputDialog("YourName");
-        nameDialog.setHeaderText("Enter your name");
-        return nameDialog.showAndWait().orElse("Anonymous");
+    private Pair<String, String> promptLoginAndPassword() {
+        // Create a new dialog for login and password
+        Dialog<Pair<String, String>> dialog = new Dialog<>();
+        dialog.setTitle("Login");
+        dialog.setHeaderText("Enter your login and password");
+
+        // Set the button types
+        ButtonType loginButtonType = new ButtonType("Login", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(loginButtonType, ButtonType.CANCEL);
+
+        // Create the login and password fields
+        TextField loginField = new TextField();
+        loginField.setPromptText("Login");
+        PasswordField passwordField = new PasswordField();
+        passwordField.setPromptText("Password");
+
+        // Organize fields in a grid
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.add(new Label("Login:"), 0, 0);
+        grid.add(loginField, 1, 0);
+        grid.add(new Label("Password:"), 0, 1);
+        grid.add(passwordField, 1, 1);
+
+        dialog.getDialogPane().setContent(grid);
+
+        // Convert the result to a Pair of login and password
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == loginButtonType) {
+                return new Pair<>(loginField.getText(), passwordField.getText());
+            }
+            return null;
+        });
+
+        // Show dialog and return result or empty if cancelled
+        Optional<Pair<String, String>> result = dialog.showAndWait();
+        return result.orElse(new Pair<>("Anonymous", ""));
     }
 
    private void sendMessage() {
