@@ -18,6 +18,7 @@ import javafx.scene.layout.GridPane;
 import javafx.util.Pair;
 import java.util.Optional;
 
+
 import java.io.*;
 import java.net.Socket;
 import java.util.HashMap;
@@ -112,6 +113,7 @@ public class ChatClient extends Application {
     mainLayout.getChildren().addAll(userGroupBox, chatBox);
 
     Scene scene = new Scene(mainLayout, 700, 500);
+    scene.getStylesheets().add("styles.css");
 
     // Make layout responsive by binding the sizes
     // Adjust the width of user and group lists based on window size
@@ -133,7 +135,7 @@ public class ChatClient extends Application {
 }
 
 
-    private void connectToServer(String hostname, int port) {
+     private void connectToServer(String hostname, int port) {
         try {
             socket = new Socket(hostname, port);
             out = new PrintWriter(socket.getOutputStream(), true);
@@ -198,6 +200,14 @@ public class ChatClient extends Application {
         Optional<Pair<String, String>> result = dialog.showAndWait();
         return result.orElse(new Pair<>("Anonymous", ""));
     }
+
+    // private void showErrorDialog(String title, String message) {
+    //     Alert alert = new Alert(Alert.AlertType.ERROR);
+    //     alert.setTitle(title);
+    //     alert.setHeaderText(null);
+    //     alert.setContentText(message);
+    //     alert.showAndWait();
+    // }
 
    private void sendMessage() {
     String message = messageInput.getText();
