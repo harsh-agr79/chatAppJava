@@ -22,9 +22,11 @@ class DatabaseHelper {
         String userTable = "CREATE TABLE IF NOT EXISTS users (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "username TEXT UNIQUE NOT NULL, " +
-                "password TEXT NOT NULL" +  // Add password column
+                "password TEXT NOT NULL, " +
+                "recipient_name TEXT, " +
+                "group_name TEXT" +
                 ");";
-
+    
         String messageTable = "CREATE TABLE IF NOT EXISTS messages (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "sender TEXT NOT NULL, " +
@@ -34,11 +36,32 @@ class DatabaseHelper {
                 "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP" +
                 ");";
 
+        String groupTable = "CREATE TABLE IF NOT EXISTS groups (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "groupname TEXT, " +
+                "groupmembers TEXT, " +
+                "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP" +
+                ");";
+    
+    
+        String mediaTable = "CREATE TABLE IF NOT EXISTS media (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "sender TEXT NOT NULL, " +
+                "recipient TEXT, " +
+                "groupname TEXT, " +
+                "filename TEXT NOT NULL, " +
+                "file_data BLOB, " +
+                "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP" +
+                ");";
+    
         try (Statement stmt = connection.createStatement()) {
             stmt.execute(userTable);
             stmt.execute(messageTable);
+            stmt.execute(mediaTable);
+            stmt.execute(groupTable);  // Create media table
         }
     }
+    
 
     public boolean addUser(String username, String password) {
         String query = "INSERT OR IGNORE INTO users (username, password) VALUES (?, ?);";
@@ -54,6 +77,35 @@ class DatabaseHelper {
             return false;
         }
     }
+    public boolean saveMedia(String sender, String recipient, String groupname, String filename, byte[] fileData) {
+        String query = "INSERT INTO media (sender, recipient, groupname, filename, file_data) VALUES (?, ?, ?, ?, ?);";
+        try (PreparedStatement pstmt = connection.prepareStatement(query)) {
+            pstmt.setString(1, sender);
+            pstmt.setString(2, recipient);
+            pstmt.setString(3, groupname);
+            pstmt.setString(4, filename);
+            pstmt.setBytes(5, fileData);
+            pstmt.executeUpdate();
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+    
+    public ResultSet getMedia(String username) {
+        String query = "SELECT * FROM media WHERE sender = ? OR recipient = ? ORDER BY timestamp;";
+        try {
+            PreparedStatement pstmt = connection.prepareStatement(query);
+            pstmt.setString(1, username);
+            pstmt.setString(2, username);
+            return pstmt.executeQuery();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+    
 
     public boolean authenticateUser(String username, String password) {
         String query = "SELECT password FROM users WHERE username = ?;";
@@ -112,6 +164,99 @@ class DatabaseHelper {
         }
     }
 
+    public List<String> getAllUsers() {
+    List<String> users = new ArrayList<>();
+    String query = "SELECT username FROM users;";
+    try (Statement stmt = connection.createStatement();
+         ResultSet result = stmt.executeQuery(query)) {
+        while (result.next()) {
+            users.add(result.getString("username"));
+        }
+    } catch (SQLException e) {
+        e.printStackTrace();
+    }
+    return users;
+}
+
+
+     public boolean createGroup(String groupName) {
+            String query = "INSERT OR IGNORE INTO groups (groupname, groupmembers) VALUES (?, ?);";
+            try (PreparedStatement pstmt = connection.prepareStatement(query)) {
+                pstmt.setString(1, groupName);
+                pstmt.setString(2, "");  // Initially no members in the group
+                pstmt.executeUpdate();
+                return true;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+    }
+
+        // Add a member to a group
+        public boolean addMemberToGroup(String groupName, String username) {
+            String selectQuery = "SELECT groupmembers FROM groups WHERE groupname = ?;";
+            String updateQuery = "UPDATE groups SET groupmembers = ? WHERE groupname = ?;";
+            try {
+                // Get current members
+                String currentMembers;
+                try (PreparedStatement selectStmt = connection.prepareStatement(selectQuery)) {
+                    selectStmt.setString(1, groupName);
+                    ResultSet rs = selectStmt.executeQuery();
+                    if (rs.next()) {
+                        currentMembers = rs.getString("groupmembers");
+                    } else {
+                        return false; // Group does not exist
+                    }
+                }
+
+                // Update members list
+                String updatedMembers = currentMembers.isEmpty() ? username : currentMembers + "," + username;
+                try (PreparedStatement updateStmt = connection.prepareStatement(updateQuery)) {
+                    updateStmt.setString(1, updatedMembers);
+                    updateStmt.setString(2, groupName);
+                    updateStmt.executeUpdate();
+                }
+                return true;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        // Remove a member from a group
+        public boolean removeMemberFromGroup(String groupName, String username) {
+            String selectQuery = "SELECT groupmembers FROM groups WHERE groupname = ?;";
+            String updateQuery = "UPDATE groups SET groupmembers = ? WHERE groupname = ?;";
+            try {
+                // Get current members
+                String currentMembers;
+                try (PreparedStatement selectStmt = connection.prepareStatement(selectQuery)) {
+                    selectStmt.setString(1, groupName);
+                    ResultSet rs = selectStmt.executeQuery();
+                    if (rs.next()) {
+                        currentMembers = rs.getString("groupmembers");
+                    } else {
+                        return false; // Group does not exist
+                    }
+                }
+
+                // Update members list
+                List<String> membersList = new ArrayList<>(Arrays.asList(currentMembers.split(",")));
+                membersList.remove(username);
+                String updatedMembers = String.join(",", membersList);
+
+                try (PreparedStatement updateStmt = connection.prepareStatement(updateQuery)) {
+                    updateStmt.setString(1, updatedMembers);
+                    updateStmt.setString(2, groupName);
+                    updateStmt.executeUpdate();
+                }
+                return true;
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return false;
+            }
+        }
+
     public void close() {
         try {
             if (connection != null) {
@@ -130,25 +275,47 @@ public class ChatServer {
     private static Map<String, Set<ClientHandler>> groups = new HashMap<>();
     private static DatabaseHelper dbHelper = new DatabaseHelper();
 
-    public static void main(String[] args) {
-        int port = 8000;
-        // Replace with your local IP address on the WiFi network
-        String localIPAddress = "10.17.235.2";
+  public static void main(String[] args) {
+    int port = 8000;
+    String localIPAddress = "192.168.137.8";
+    
+    // Initialize clientHandlers from the database
+    List<String> users = dbHelper.getAllUsers();
+    System.out.println(users);
+    for (String username : users) {
+        ClientHandler dummyClientHandler = new ClientHandler(null, clientHandlers, groups, dbHelper);
+        dummyClientHandler.setClientName(username);  // Set the client name
+        clientHandlers.add(dummyClientHandler);
+    }
 
-        try (ServerSocket serverSocket = new ServerSocket(port, 50, InetAddress.getByName(localIPAddress))) {
-            System.out.println("Server is listening on IP " + localIPAddress + " and port " + port);
+    try (ServerSocket serverSocket = new ServerSocket(port, 50, InetAddress.getByName(localIPAddress))) {
+        System.out.println("Server is listening on IP " + localIPAddress + " and port " + port);
 
-            while (true) {
-                Socket socket = serverSocket.accept();
-                System.out.println("New client connected");
-                ClientHandler clientHandler = new ClientHandler(socket, clientHandlers, groups, dbHelper);
-                clientHandlers.add(clientHandler);
-                new Thread(clientHandler).start();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+        while (true) {
+            Socket socket = serverSocket.accept();
+            System.out.println("New client connected");
+            ClientHandler clientHandler = new ClientHandler(socket, clientHandlers, groups, dbHelper);
+            clientHandler.setClientName(" ");
+            clientHandlers.add(clientHandler);
+            new Thread(clientHandler).start();
+        }
+    } catch (IOException e) {
+        e.printStackTrace();
+    }
+}
+
+    static void removeClient(String username) {
+    Iterator<ClientHandler> iterator = clientHandlers.iterator();
+    while (iterator.hasNext()) {
+        ClientHandler client = iterator.next();
+        if (client.getClientName() != null && client.getClientName().equals(username)) {
+            iterator.remove(); // Safely remove the client
+            break; // Exit after finding and removing the client
         }
     }
+}
+
+
 
     // Broadcast updated user list to all clients
     static void broadcastUserList() {
@@ -191,6 +358,10 @@ class ClientHandler implements Runnable {
     private Map<String, Set<ClientHandler>> groups;
     private DatabaseHelper dbHelper;
 
+    public void setClientName(String clientName) {
+        this.clientName = clientName;
+    }
+
     public ClientHandler(Socket socket, Set<ClientHandler> clientHandlers, Map<String, Set<ClientHandler>> groups, DatabaseHelper dbHelper) {
         this.socket = socket;
         this.clientHandlers = clientHandlers;
@@ -210,8 +381,11 @@ class ClientHandler implements Runnable {
             out.println("Enter your password:");
             String password = in.readLine();
 
+            // ChatServer.removeClient(username);
+
             // Check user authentication or register if new user
             if (dbHelper.authenticateUser(username, password)) {
+                ChatServer.removeClient(username);
                 clientName = username;
                 out.println("Welcome back, " + clientName + "!");
                 // Retrieve and display chat history
@@ -224,21 +398,35 @@ class ClientHandler implements Runnable {
                 closeConnection();
                 return;
             }
+            
+            
 
             broadcast(clientName + " has joined the chat", null);
             ChatServer.broadcastUserList();
 
             String message;
             while ((message = in.readLine()) != null) {
-                if (message.startsWith("@")) {
-                    handlePrivateMessage(message);
+                System.out.println("main handler: "+ message);
+                if (message.startsWith("Private to")) {
+                    String fullMessage = clientName + ": " + message;
+                    handlePrivateMessage(fullMessage);
                 } else if (message.startsWith("/group")) {
                     handleGroupCommand(message);
+                } else if (message.startsWith("Group")){
+                    sendGroupMessage(message, this);
                 } else {
                     String fullMessage = clientName + ": " + message;
                     broadcast(fullMessage, this);
                     dbHelper.saveMessage(clientName, null, null, fullMessage); // Save public message
                 }
+                // Inside the run() method or message-handling logic
+                if (message.startsWith("/sendfile")) {
+                    String[] tokens = message.split(" ", 2);
+                    String fileName = tokens[1];
+                    out.println("Ready to receive file: " + fileName);
+                    handleFileTransfer(fileName);
+}
+
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -255,12 +443,37 @@ class ClientHandler implements Runnable {
                 String recipient = chatHistory.getString("recipient");
                 String group = chatHistory.getString("groupname");
                 String content = chatHistory.getString("content");
-                out.println(formatMessage(sender, recipient, group, content));
+                out.println("History: "+content);
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
     }
+    private void handleFileTransfer(String fileName) {
+        try {
+            // Create an output stream to save the file
+            FileOutputStream fileOutputStream = new FileOutputStream("uploads/" + fileName);
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+    
+            // Read the incoming file data
+            while ((bytesRead = socket.getInputStream().read(buffer)) > 0) {
+                fileOutputStream.write(buffer, 0, bytesRead);
+                if (bytesRead < buffer.length) {
+                    break; // Break when file reading is complete
+                }
+            }
+    
+            fileOutputStream.close();
+            System.out.println("File " + fileName + " received successfully.");
+            broadcast("File " + fileName + " uploaded by " + clientName, null);
+            
+        } catch (IOException e) {
+            e.printStackTrace();
+            out.println("Error receiving the file.");
+        }
+    }
+    
 
     private String formatMessage(String sender, String recipient, String group, String content) {
         if (group != null) {
@@ -273,10 +486,21 @@ class ClientHandler implements Runnable {
     }
 
     private void handlePrivateMessage(String message) {
-        String[] splitMessage = message.split(" ", 2);
-        String recipientName = splitMessage[0].substring(1);
-        String privateMessage = splitMessage[1];
-        sendPrivateMessage(recipientName, privateMessage);
+        System.out.println(message);
+        String[] senderSplit = message.split(":", 2); 
+        String remainingMessage = senderSplit[1].trim(); // "Private to dev: sdfkjnfds redo this"
+
+        // Step 2: Split by "Private to" to isolate recipient and message
+        String[] privateSplit = remainingMessage.split("Private to", 2);
+        String recipientPart = privateSplit[1].trim(); // "dev: sdfkjnfds redo this"
+
+        // Step 3: Split by ":" to get recipient and actual message
+        String[] recipientAndMessage = recipientPart.split(":", 2);
+
+        String recipientName = recipientAndMessage[0].trim(); // "dev"
+        String privateMessage = recipientAndMessage[1].trim(); // "sdfkjnfds redo this"
+        System.out.println(recipientName+privateMessage);
+        sendPrivateMessage(recipientName, message);
     }
 
     private void handleGroupCommand(String message) {
@@ -293,9 +517,6 @@ class ClientHandler implements Runnable {
             case "leave":
                 leaveGroup(tokens[2]);
                 break;
-            case "msg":
-                sendGroupMessage(tokens[2]);
-                break;
             default:
                 out.println("Invalid group command");
         }
@@ -306,6 +527,7 @@ class ClientHandler implements Runnable {
             groups.put(groupName, new HashSet<>());
             out.println("Group " + groupName + " created.");
             ChatServer.broadcastGroupList();
+            dbHelper.createGroup(groupName);
         } else {
             out.println("Group " + groupName + " already exists.");
         }
@@ -316,6 +538,7 @@ class ClientHandler implements Runnable {
             groups.get(groupName).add(this);
             out.println("You joined group " + groupName);
             ChatServer.broadcastGroupList();
+            dbHelper.addMemberToGroup(groupName, this.clientName);
         } else {
             out.println("Group " + groupName + " does not exist.");
         }
@@ -326,21 +549,26 @@ class ClientHandler implements Runnable {
             groups.get(groupName).remove(this);
             out.println("You left group " + groupName);
             ChatServer.broadcastGroupList();
+            dbHelper.removeMemberFromGroup(groupName, this.clientName);
         } else {
             out.println("You are not a member of group " + groupName);
         }
     }
 
-    private void sendGroupMessage(String groupMessage) {
-        String[] splitMessage = groupMessage.split(" ", 2);
-        String groupName = splitMessage[0];
-        String message = splitMessage[1];
+    private void sendGroupMessage(String groupMessage, ClientHandler sender) {
+        String[] splitMessage = groupMessage.split(" ", 3);
+        String[] group = splitMessage[1].split(":",2);
+        String groupName = group[0];
+        String message = splitMessage[2];
 
         if (groups.containsKey(groupName)) {
             for (ClientHandler client : groups.get(groupName)) {
-                client.out.println("[Group " + groupName + "] " + clientName + ": " + message);
+                if(client != sender){
+                    client.out.println(sender.clientName+": " + groupMessage);
+                }
             }
-            dbHelper.saveMessage(clientName, null, groupName, message); // Save group message
+            String msg = sender.clientName+": " + groupMessage;
+            dbHelper.saveMessage(sender.clientName, null, groupName, msg); // Save group message
         } else {
             out.println("Group " + groupName + " does not exist.");
         }
@@ -349,7 +577,7 @@ class ClientHandler implements Runnable {
     private void sendPrivateMessage(String recipientName, String message) {
         for (ClientHandler client : clientHandlers) {
             if (client.clientName.equals(recipientName)) {
-                client.out.println("Private from " + clientName + ": " + message);
+                client.out.println(message);
                 dbHelper.saveMessage(clientName, recipientName, null, message); // Save private message
                 return;
             }
@@ -357,20 +585,22 @@ class ClientHandler implements Runnable {
         out.println("User " + recipientName + " not found.");
     }
 
-    private void broadcast(String message, ClientHandler excludeClient) {
-        for (ClientHandler client : clientHandlers) {
-            if (client != excludeClient) {
-                client.out.println(message);
-            }
+  public void broadcast(String message, ClientHandler excludeClient) {
+    for (ClientHandler clientHandler : clientHandlers) {
+        if (clientHandler.out != null) {  // Only broadcast to active clients
+            clientHandler.out.println(message);
+            clientHandler.out.flush();
         }
     }
+}
+
 
     private void closeConnection() {
         try {
             clientHandlers.remove(this);
             socket.close();
             broadcast(clientName + " has left the chat", null);
-            ChatServer.broadcastUserList();
+            // ChatServer.broadcastUserList();
         } catch (IOException e) {
             e.printStackTrace();
         }

@@ -131,7 +131,7 @@ public class ChatClient extends Application {
     primaryStage.show();
 
     // Now connect to the server and start the listener thread
-    connectToServer("10.17.235.2", 8000); // Use your server's IP address here
+    connectToServer("192.168.137.8", 8000); // Use your server's IP address here
 }
 
 
@@ -400,7 +400,36 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
     }
 
     private void handlePrivateMessage(String message) {
-    System.out.println("Received message: " + message);
+    // System.out.println("Received message: " + message);
+
+    if(message.startsWith("History:")){
+            String[] parts = message.split(": ", 4);
+            // for(int i = 0; i < 4; i++){
+            //     System.out.println(parts[i]);
+            // }
+            String senderName = parts[1];          // Get the sender's name
+            String[] recipientPart = parts[2].split(" ", 3);       // Contains "recipient: message"
+            // String[] recipientAndMessage = recipientPart.split(":", 2);
+            String recipientName = recipientPart[2]; // Get the recipient name
+            String msg = parts[3];       // Get the message
+
+            // Determine the chat key (the user you're chatting with)
+            String chatKey = senderName.equals(clientName) ? recipientName : senderName;
+
+            // Create the message format based on the sender
+            String formattedMessage;
+            if (senderName.equals(clientName)) {
+                formattedMessage = "You: " + msg;
+            } else {
+                formattedMessage = senderName + ": " + msg;
+            }
+
+            // Append the message to the chat history in userChats
+            userChats.computeIfAbsent(chatKey, k -> new StringBuilder()).append(formattedMessage).append("\n");
+            return;
+    }
+
+
 
     // Extract sender before the first colon (i.e., "dev")
     int senderEndIndex = message.indexOf(":");
