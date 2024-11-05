@@ -137,6 +137,49 @@ class DatabaseHelper {
             return null;
         }
     }
+    public List<String> getGroupNames() {
+        List<String> groupNames = new ArrayList<>();
+        String query = "SELECT groupname FROM groups"; // Adjust table/column names to match your database schema
+
+        try (PreparedStatement statement = connection.prepareStatement(query);
+             ResultSet resultSet = statement.executeQuery()) {
+
+            while (resultSet.next()) {
+                String groupName = resultSet.getString("groupname");
+                groupNames.add(groupName);
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            // Handle exceptions (e.g., logging)
+        }
+
+        return groupNames;
+    }
+    public List<String> getUserGroups(String username) {
+    List<String> userGroups = new ArrayList<>();
+    String query = "SELECT groupname, groupmembers FROM groups";
+
+    try (Statement statement = connection.createStatement();
+         ResultSet resultSet = statement.executeQuery(query)) {
+
+        while (resultSet.next()) {
+            String groupName = resultSet.getString("groupname");
+            String members = resultSet.getString("groupmembers");
+
+            // Check if the username is in the comma-separated list of members
+            List<String> memberList = Arrays.asList(members.split(","));
+            if (memberList.contains(username)) {
+                userGroups.add(groupName);
+            }
+        }
+    } catch (SQLException e) {
+        e.printStackTrace();
+        // Handle exceptions, e.g., logging
+    }
+    return userGroups;
+    }
+
 
     public void saveMessage(String sender, String recipient, String groupname, String content) {
         String query = "INSERT INTO messages (sender, recipient, groupname, content) VALUES (?, ?, ?, ?);";
@@ -151,18 +194,72 @@ class DatabaseHelper {
         }
     }
 
+   
     public ResultSet getUserMessages(String username) {
-        String query = "SELECT * FROM messages WHERE sender = ? OR recipient = ? ORDER BY timestamp;";
-        try {
-            PreparedStatement pstmt = connection.prepareStatement(query);
-            pstmt.setString(1, username);
-            pstmt.setString(2, username);
-            return pstmt.executeQuery();
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return null;
+    // Retrieve the groups the user has joined
+    List<String> userGroups = getUserGroups(username);
+    String groupPlaceholders = String.join(",", Collections.nCopies(userGroups.size(), "?"));
+
+    // Modify query to include the restriction and load messages accordingly
+    String query = "SELECT * FROM messages " +
+                   "WHERE ((sender = ? OR recipient = ?) " +
+                   "OR (groupname IS NOT NULL AND groupname IN (" + groupPlaceholders + "))) " +
+                   "AND ((recipient IS NOT NULL AND groupname IS NULL) " +
+                   "OR (recipient IS NULL AND groupname IS NOT NULL)) " +
+                   "ORDER BY timestamp;";
+
+    try {
+        PreparedStatement pstmt = connection.prepareStatement(query);
+        pstmt.setString(1, username);
+        pstmt.setString(2, username);
+
+        // Set group names in the placeholders dynamically
+        int index = 3; // Start setting group names from the 3rd placeholder
+        for (String group : userGroups) {
+            pstmt.setString(index++, group);
         }
+
+        return pstmt.executeQuery();
+    } catch (SQLException e) {
+        e.printStackTrace();
+        return null;
     }
+}
+
+public ResultSet getGroupMessages(String username) {
+    // Retrieve the groups the user has joined
+    List<String> userGroups = getUserGroups(username);
+    
+    if (userGroups.isEmpty()) {
+        return null; // If the user is not part of any groups, return null or handle accordingly
+    }
+    
+    // Create placeholders for the groups in the SQL query
+    String groupPlaceholders = String.join(",", Collections.nCopies(userGroups.size(), "?"));
+    
+    // SQL query to retrieve only group messages for the groups the user is part of
+    String query = "SELECT * FROM messages " +
+                   "WHERE groupname IS NOT NULL " +
+                   "AND groupname IN (" + groupPlaceholders + ") " +
+                   "ORDER BY timestamp;";
+    
+    try {
+        PreparedStatement pstmt = connection.prepareStatement(query);
+        
+        // Set group names dynamically in the placeholders
+        int index = 1;
+        for (String group : userGroups) {
+            pstmt.setString(index++, group);
+        }
+        
+        return pstmt.executeQuery();
+    } catch (SQLException e) {
+        e.printStackTrace();
+        return null;
+    }
+}
+
+
 
     public List<String> getAllUsers() {
     List<String> users = new ArrayList<>();
@@ -277,7 +374,7 @@ public class ChatServer {
 
   public static void main(String[] args) {
     int port = 8000;
-    String localIPAddress = "192.168.137.8";
+    String localIPAddress = "10.17.235.2";
     
     // Initialize clientHandlers from the database
     List<String> users = dbHelper.getAllUsers();
@@ -286,6 +383,11 @@ public class ChatServer {
         ClientHandler dummyClientHandler = new ClientHandler(null, clientHandlers, groups, dbHelper);
         dummyClientHandler.setClientName(username);  // Set the client name
         clientHandlers.add(dummyClientHandler);
+    }
+    List<String> groupNames = dbHelper.getGroupNames(); // Fetch group names from the database
+
+    for (String groupName : groupNames) {
+        groups.put(groupName, new HashSet<>()); // Initialize each group with an empty set of ClientHandlers
     }
 
     try (ServerSocket serverSocket = new ServerSocket(port, 50, InetAddress.getByName(localIPAddress))) {
@@ -389,6 +491,7 @@ class ClientHandler implements Runnable {
                 clientName = username;
                 out.println("Welcome back, " + clientName + "!");
                 // Retrieve and display chat history
+                joinUserToGroups();
                 displayChatHistory(username);
             } else if (dbHelper.addUser(username, password)) {
                 clientName = username;
@@ -403,6 +506,7 @@ class ClientHandler implements Runnable {
 
             broadcast(clientName + " has joined the chat", null);
             ChatServer.broadcastUserList();
+            ChatServer.broadcastGroupList();
 
             String message;
             while ((message = in.readLine()) != null) {
@@ -434,7 +538,20 @@ class ClientHandler implements Runnable {
             closeConnection();
         }
     }
-
+    public void joinUserToGroups() {
+        List<String> userGroups = dbHelper.getUserGroups(clientName); // Retrieve the groups for this user
+        System.out.println("usergrps: "+ userGroups);
+        for (String group : userGroups) {
+            // Check if the group exists in the groups map, then add the user to it
+            groups.computeIfPresent(group, (key, members) -> {
+                members.add(this); // Add the ClientHandler instance to the set
+                return members;
+            });
+            // System.out.println("System groups: "+ groups);
+            // groups.get(group).add(this);
+        }
+        out.println("/joinedGroups "+ String.join(", ", userGroups));
+    }
     private void displayChatHistory(String username) {
         try {
             ResultSet chatHistory = dbHelper.getUserMessages(username);
@@ -520,6 +637,8 @@ class ClientHandler implements Runnable {
             default:
                 out.println("Invalid group command");
         }
+
+        System.out.println("System groups: "+ groups);
     }
 
     private void createGroup(String groupName) {
@@ -539,6 +658,18 @@ class ClientHandler implements Runnable {
             out.println("You joined group " + groupName);
             ChatServer.broadcastGroupList();
             dbHelper.addMemberToGroup(groupName, this.clientName);
+             try {
+                ResultSet chatHistory = dbHelper.getGroupMessages(this.clientName);
+                while (chatHistory != null && chatHistory.next()) {
+                    String sender = chatHistory.getString("sender");
+                    String recipient = chatHistory.getString("recipient");
+                    String group = chatHistory.getString("groupname");
+                    String content = chatHistory.getString("content");
+                    out.println("History: "+content);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         } else {
             out.println("Group " + groupName + " does not exist.");
         }

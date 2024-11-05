@@ -17,7 +17,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.util.Pair;
 import java.util.Optional;
-
+import javafx.geometry.Pos;
 
 import java.io.*;
 import java.net.Socket;
@@ -52,7 +52,7 @@ public class ChatClient extends Application {
     }
 
     @Override
-    public void start(Stage primaryStage) {
+public void start(Stage primaryStage) {
     // Initialize the UI components first
     VBox chatBox = new VBox(10);
     chatBox.setPadding(new Insets(10));
@@ -112,11 +112,26 @@ public class ChatClient extends Application {
     mainLayout.setPadding(new Insets(10));
     mainLayout.getChildren().addAll(userGroupBox, chatBox);
 
-    Scene scene = new Scene(mainLayout, 700, 500);
+    // Add the Logout button
+    Button logoutButton = new Button("Logout");
+    logoutButton.setOnAction(e -> {
+        primaryStage.close();  // Close the application window
+        System.exit(0);        // Terminate the program
+    });
+
+    // Top bar layout with logout button aligned to the right
+    HBox topBar = new HBox();
+    topBar.setPadding(new Insets(10, 10, 0, 10));
+    topBar.setAlignment(Pos.TOP_RIGHT);
+    topBar.getChildren().add(logoutButton);
+
+    // Combine top bar and main layout
+    VBox rootLayout = new VBox(topBar, mainLayout);
+
+    Scene scene = new Scene(rootLayout, 700, 500);
     scene.getStylesheets().add("styles.css");
 
     // Make layout responsive by binding the sizes
-    // Adjust the width of user and group lists based on window size
     userGroupBox.prefWidthProperty().bind(scene.widthProperty().multiply(0.25)); // 25% of window width
     userListView.prefHeightProperty().bind(scene.heightProperty().multiply(0.35)); // 35% of window height
     groupListView.prefHeightProperty().bind(scene.heightProperty().multiply(0.35)); // 35% of window height
@@ -131,8 +146,9 @@ public class ChatClient extends Application {
     primaryStage.show();
 
     // Now connect to the server and start the listener thread
-    connectToServer("192.168.137.8", 8000); // Use your server's IP address here
+    connectToServer("10.17.235.2", 8000); // Use your server's IP address here
 }
+
 
 
      private void connectToServer(String hostname, int port) {
@@ -366,6 +382,8 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
                             updateUserList(message);
                         } else if (message.startsWith("/grouplist")) {
                             updateGroupList(message);
+                        } else if (message.startsWith("/joinedGroups")) {
+                            updateJoinedGroupList(message);
                         } else if (message.contains("Private to")) {
                             handlePrivateMessage(message);
                         } else if (message.contains(": Group ")) {
@@ -388,6 +406,14 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
             users.add(user.trim());
         }
         updateUserListView();
+    }
+
+    private void updateJoinedGroupList(String message){
+        String[] cont = message.split(" ", 2);
+        String[] groups = cont[1].split(", ");
+        for(String group : groups){
+            joinedGroups.add(group);
+        }
     }
 
     private void updateGroupList(String message) {
@@ -471,7 +497,32 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
     }
 }
 private void handleGroupMessage(String message) {
-    System.out.println("Received message: " + message);
+    // System.out.println("Received message: " + message);
+    if(message.startsWith("History:")){
+            String[] parts = message.split(": ", 4);
+            // for(int i = 0; i < 4; i++){
+            //     System.out.println(parts[i]);
+            // }
+            String senderName = parts[1];          // Get the sender's name
+            // if(parts[2].startsWith("Group")){
+                String[] rec = parts[2].split(" ", 2);
+                String grpname = rec[1];
+                String msg = parts[3]; 
+
+                String chatKey = grpname;
+
+                    // Create the message format based on the sender
+                String formattedMessage;
+                if (senderName.equals(clientName)) {
+                    formattedMessage = "[" + grpname + "] " + "You: " + msg;
+                } else {
+                    formattedMessage = "[" + grpname + "] " + senderName + ": " + msg;
+                }
+                // Append the message to the chat history in userChats
+                groupChats.computeIfAbsent(chatKey, k -> new StringBuilder()).append(formattedMessage).append("\n");
+                return;
+            // }
+    }
 
     // Extract sender before the first colon (i.e., "dev")
     int senderEndIndex = message.indexOf(":");
