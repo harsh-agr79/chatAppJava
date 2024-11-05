@@ -424,7 +424,18 @@ public class ChatServer {
         StringBuilder userList = new StringBuilder("/userlist ");
         for (ClientHandler client : clientHandlers) {
             if (client.getClientName() != null) {
-                userList.append(client.getClientName()).append(",");
+                if (client.socket == null) {
+                    // System.out.println("offline,");
+                    userList.append(client.getClientName() + ":offline").append(",");
+                } else if(client.socket.isConnected() && !client.socket.isClosed()){
+                    // System.out.println("online,");
+                    userList.append(client.getClientName() + ":online").append(",");
+                }
+                else{
+                    // System.out.println("offline,");
+                    userList.append(client.getClientName() + ":offline").append(",");
+                }
+                // userList.append(client.getClientName()).append(",");
             }
         }
         String userListMessage = userList.toString();
@@ -452,7 +463,7 @@ public class ChatServer {
 
 class ClientHandler implements Runnable {
 
-    private Socket socket;
+    public Socket socket;
     private PrintWriter out;
     private BufferedReader in;
     private String clientName;
@@ -504,8 +515,8 @@ class ClientHandler implements Runnable {
             
             
 
-            broadcast(clientName + " has joined the chat", null);
             ChatServer.broadcastUserList();
+            broadcast(clientName + " has joined the chat", null);
             ChatServer.broadcastGroupList();
 
             String message;
@@ -728,10 +739,11 @@ class ClientHandler implements Runnable {
 
     private void closeConnection() {
         try {
-            clientHandlers.remove(this);
+            // clientHandlers.remove(this);
+            // this.socket
             socket.close();
             broadcast(clientName + " has left the chat", null);
-            // ChatServer.broadcastUserList();
+            ChatServer.broadcastUserList();
         } catch (IOException e) {
             e.printStackTrace();
         }

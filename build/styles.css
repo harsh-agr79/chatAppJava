@@ -47,10 +47,10 @@
     -fx-background-radius: 5px;
 }
 
-.list-cell {
+/* .list-cell {
     -fx-text-fill: #ecf0f1;
     -fx-font-weight: bold;
-}
+} */
 
 /* Labels styling */
 .label {
