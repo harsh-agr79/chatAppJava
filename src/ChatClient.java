@@ -20,6 +20,11 @@ import java.util.Optional;
 import javafx.geometry.Pos;
 import javafx.scene.paint.Color;
 import javafx.scene.control.ListCell;
+import javafx.scene.text.Text;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
+import javafx.scene.paint.Color;
+
 
 import java.io.*;
 import java.net.Socket;
@@ -405,15 +410,63 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
         }
     }
 
-    // private void updateUserList(String message) {
-    //     String[] userArray = message.substring(10).split(",");
-    //     users.clear();
-    //     for (String user : userArray) {
-    //         String[] br = user.split(":");
-    //         users.add(br[0].trim());
-    //     }
-    //     updateUserListView();
-    // }
+    private void updateUserList(String message) {
+       // Set cell factory for userListView to customize the display of items
+        userListView.setCellFactory(lv -> new ListCell<String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setGraphic(null);
+                } else {
+                    // Assuming items are in the format "username:status"
+                    String[] userParts = item.split(":");
+                    String username = userParts[0].trim();
+                    String status = userParts[1].trim();
+
+                    setText(username);  // Set the username as the text
+                    if (status.equalsIgnoreCase("online")) {
+                        setTextFill(javafx.scene.paint.Color.GREEN);  // Set text color for online
+                    } else {
+                        setTextFill(javafx.scene.paint.Color.GRAY);  // Set text color for offline
+                    }
+                }
+            }
+        });
+
+        // Listener for item selection in userListView
+        userListView.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue != null) {
+                // Extract the username from the selected item
+                String[] userParts = newValue.split(":");
+                String selectedUsername = userParts[0].trim(); // Get the username
+                
+                // Now you can use the selectedUsername to handle chat logic
+                currentChatType = "user"; // Set the chat type
+                currentChatName = selectedUsername; // Set the chat name
+
+                displayUserChat(selectedUsername); // Call the method to display chat
+            }
+        });
+
+        String[] users = message.substring(10).split(",");
+        Platform.runLater(() -> {
+            userListView.getItems().clear();  // Clear existing items first
+
+            for (String user : users) {
+                // Assuming the format is "username:status"
+                String[] userParts = user.split(":");
+                String username = userParts[0].trim(); // Extract the username
+
+                // Check if the username is the same as clientName; if so, skip it
+                if (!username.equals(clientName)) {
+                    userListView.getItems().add(user);  // Add username and status as a single string
+                }
+            }
+        });
+
+    }
 
     // private void changeOfflineUserList(String message){
 
@@ -423,56 +476,56 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
 
     // }
 
-   private void updateUserList(String message) {
-    Platform.runLater(() -> {
-        // Clear current items
-        userListView.getItems().clear();
+//    private void updateUserList(String message) {
+//     Platform.runLater(() -> {
+//         // Clear current items
+//         userListView.getItems().clear();
 
-        // Split incoming message into individual user data
-        String[] userArray = message.substring(10).split(",");
+//         // Split incoming message into individual user data
+//         String[] userArray = message.substring(10).split(",");
 
-        // Populate ListView with username:status items, skipping the current client
-        for (String user : userArray) {
-            String[] parts = user.split(":");
-            String username = parts[0].trim();
-            String status = parts.length > 1 ? parts[1].trim() : "offline"; // Default to "offline" if no status
+//         // Populate ListView with username:status items, skipping the current client
+//         for (String user : userArray) {
+//             String[] parts = user.split(":");
+//             String username = parts[0].trim();
+//             String status = parts.length > 1 ? parts[1].trim() : "offline"; // Default to "offline" if no status
 
-            // Skip adding the current user's name to the list
-            if (username.equals(clientName)) {
-                continue;
-            }
+//             // Skip adding the current user's name to the list
+//             if (username.equals(clientName)) {
+//                 continue;
+//             }
 
-            // Add to ListView in the form "username:status" for later reference
-            userListView.getItems().add(username + ":" + status);
-        }
+//             // Add to ListView in the form "username:status" for later reference
+//             userListView.getItems().add(username + ":" + status);
+//         }
 
-        // Set custom cell factory to apply color based on online/offline status
-        userListView.setCellFactory(listView -> new ListCell<String>() {
-            @Override
-            protected void updateItem(String item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setText(null);
-                    setTextFill(Color.BLACK); // Default color for empty cells
-                } else {
-                    // Extract username and status from the item
-                    String[] parts = item.split(":");
-                    String username = parts[0].trim();
-                    String status = parts.length > 1 ? parts[1].trim() : "offline";
+//         // Set custom cell factory to apply color based on online/offline status
+//         userListView.setCellFactory(listView -> new ListCell<String>() {
+//             @Override
+//             protected void updateItem(String item, boolean empty) {
+//                 super.updateItem(item, empty);
+//                 if (empty || item == null) {
+//                     setText(null);
+//                     setTextFill(Color.BLACK); // Default color for empty cells
+//                 } else {
+//                     // Extract username and status from the item
+//                     String[] parts = item.split(":");
+//                     String username = parts[0].trim();
+//                     String status = parts.length > 1 ? parts[1].trim() : "offline";
 
-                    setText(username); // Display only the username
+//                     setText(username); // Display only the username
 
-                    // Apply color based on status
-                    if (status.equalsIgnoreCase("online")) {
-                        setTextFill(Color.GREEN);
-                    } else {
-                        setTextFill(Color.GRAY);
-                    }
-                }
-            }
-        });
-    });
-}
+//                     // Apply color based on status
+//                     if (status.equalsIgnoreCase("online")) {
+//                         setTextFill(Color.GREEN);
+//                     } else {
+//                         setTextFill(Color.GRAY);
+//                     }
+//                 }
+//             }
+//         });
+//     });
+// }
 
     private void updateJoinedGroupList(String message){
         String[] cont = message.split(" ", 2);
