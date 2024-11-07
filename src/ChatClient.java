@@ -24,10 +24,14 @@ import javafx.scene.text.Text;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.paint.Color;
+import javafx.scene.image.ImageView;
+import javafx.scene.image.Image;
+import javafx.stage.FileChooser;
 
 
 import java.io.*;
 import java.net.Socket;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -38,7 +42,7 @@ public class ChatClient extends Application {
     private PrintWriter out;
     private BufferedReader in;
 
-    private TextArea chatArea;
+    private VBox chatArea;
     private TextField messageInput;
     private ListView<String> userListView;
     private ListView<String> groupListView;
@@ -64,8 +68,14 @@ public void start(Stage primaryStage) {
     VBox chatBox = new VBox(10);
     chatBox.setPadding(new Insets(10));
 
-    chatArea = new TextArea();
-    chatArea.setEditable(false);
+    chatArea = new VBox(5);
+    chatArea.setPadding(new Insets(10));
+    chatArea.setStyle("-fx-background-color: #f4f4f4;");
+
+    ScrollPane scrollPane = new ScrollPane(chatArea);
+    scrollPane.setFitToWidth(true); // Makes the chatArea fit the width of the ScrollPane
+    scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED); // Show scrollbar only when needed
+    scrollPane.setStyle("-fx-background-color: transparent;");
 
     messageInput = new TextField();
 
@@ -79,8 +89,19 @@ public void start(Stage primaryStage) {
     Button sendButton = new Button("Send");
     sendButton.setOnAction(e -> sendMessage());
 
-    HBox messageBox = new HBox(10, messageInput, sendButton);
-    chatBox.getChildren().addAll(chatArea, messageBox);
+    Button sendImageButton = new Button("Send Image");
+    sendImageButton.setOnAction(e -> {
+        if (currentChatName != null) {
+            sendImage(currentChatName, currentChatType.equals("group"));
+        } else {
+            Text messageText = new Text("Select a user or group to send an image.\n");
+            chatArea.getChildren().add(messageText);
+            // chatArea.appendText("Select a user or group to send an image.\n");
+        }
+    });
+
+    HBox messageBox = new HBox(10, messageInput, sendButton, sendImageButton);
+    chatBox.getChildren().addAll(chatArea, scrollPane, messageBox);
 
     // User and Group lists
     userListView = new ListView<>();
@@ -247,13 +268,17 @@ public void start(Stage primaryStage) {
                     appendToGroupChat(currentChatName, message, true);  // Just "You: message"
                 } else {
                     // Notify the user that they need to join the group
-                    chatArea.appendText("You need to join the group " + currentChatName + " to send messages.\n");
+                    // chatArea.appendText("You need to join the group " + currentChatName + " to send messages.\n");
+                    Text messageText = new Text("You need to join the group " + currentChatName + " to send messages.\n");
+                    chatArea.getChildren().add(messageText);
                 }
             }
         } else {
             // Broadcast message
             out.println(message);
-            chatArea.appendText("You: " + message + "\n");
+            // chatArea.appendText("You: " + message + "\n");
+            Text messageText = new Text("You: " + message);
+            chatArea.getChildren().add(messageText);
         }
         messageInput.clear();
     }
@@ -270,7 +295,92 @@ public void start(Stage primaryStage) {
     System.out.println("Appended to " + userName + "'s chat: " + formattedMessage); // Debug statement
 
     if (currentChatType != null && currentChatType.equals("user") && currentChatName.equals(userName)) {
-        Platform.runLater(() -> chatArea.appendText(formattedMessage + "\n"));
+        Text messageText = new Text(formattedMessage + "\n");
+        Platform.runLater(() ->  chatArea.getChildren().add(messageText));
+    }
+}
+
+public void sendImage(String recipient, boolean isGroup) {
+    FileChooser fileChooser = new FileChooser();
+    fileChooser.setTitle("Select Image");
+    fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Image Files", "*.png", "*.jpg", "*.jpeg", "*.gif"));
+
+    File file = fileChooser.showOpenDialog(null);
+    if (file != null) {
+        try {
+            byte[] imageData = Files.readAllBytes(file.toPath());
+
+            // Prepare the message header
+            String header = (isGroup ? "/groupimage " : "/privateimage ")+clientName+" " + recipient + " " + file.getName() + " " + imageData.length;
+            out.println(header);  // Send header first
+
+            // Send the image data
+            socket.getOutputStream().write(imageData);
+            socket.getOutputStream().flush();
+            
+            out.println("done sending image");
+
+            appendImageToChat(recipient, file.getName(), imageData, true); // Show image in sender's chat
+        } catch (IOException e) {
+            showErrorDialog("Image Sending Error", "Could not send the image. Try again.");
+            e.printStackTrace();
+        }
+    }
+}
+
+public void appendImageToChat(String chatName, String fileName, byte[] imageData, boolean isSent) {
+    String senderText = isSent ? "You" : chatName;
+    String messageText = senderText + " sent an image: " + fileName;
+
+    // Create a text label to describe the image
+    Label textLabel = new Label(messageText);
+    textLabel.setWrapText(true);
+
+    // Decode the image data and create an ImageView for it
+    Image image = decodeImageData(imageData);
+    if (image == null) return; // Stop if image decoding failed
+
+    ImageView imageView = new ImageView(image);
+    imageView.setFitWidth(100);  // Set a smaller width for thumbnail view
+    imageView.setPreserveRatio(true);
+
+    // Add click event to open the image in a new window when clicked
+    imageView.setOnMouseClicked(event -> openImageInNewWindow(image, fileName));
+
+    // Use Platform.runLater to update the UI on the JavaFX Application Thread
+    Platform.runLater(() -> {
+        VBox chatItem = new VBox(textLabel, imageView);
+        chatItem.setSpacing(5);
+        chatArea.getChildren().add(chatItem);  // Add both label and thumbnail to VBox
+    });
+}
+
+private void openImageInNewWindow(Image image, String fileName) {
+    Stage imageStage = new Stage();
+    imageStage.setTitle("Image - " + fileName);
+
+    // Full-sized ImageView in the new window
+    ImageView fullSizeImageView = new ImageView(image);
+    fullSizeImageView.setPreserveRatio(true);
+    fullSizeImageView.setFitWidth(600);  // Adjust width
+    fullSizeImageView.setFitHeight(400); // Adjust height
+
+    VBox imageLayout = new VBox(fullSizeImageView);
+    imageLayout.setAlignment(Pos.CENTER);
+    imageLayout.setPadding(new Insets(10));
+
+    Scene imageScene = new Scene(imageLayout);
+    imageStage.setScene(imageScene);
+    imageStage.show();
+}
+
+private Image decodeImageData(byte[] imageData) {
+    try (ByteArrayInputStream bais = new ByteArrayInputStream(imageData)) {
+        return new Image(bais);
+    } catch (Exception e) {
+        showErrorDialog("Image Display Error", "Could not display the image.");
+        e.printStackTrace();
+        return null;
     }
 }
 
@@ -286,7 +396,8 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
     System.out.println("Appended to " + groupName + " chat: " + formattedMessage); // Debug statement
 
     if (currentChatType != null && currentChatType.equals("group") && currentChatName.equals(groupName)) {
-        Platform.runLater(() -> chatArea.appendText(formattedMessage + "\n"));
+         Text messageText = new Text(formattedMessage + "\n");
+        Platform.runLater(() ->  chatArea.getChildren().add(messageText));
     }
 }
 
@@ -300,7 +411,10 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
         if (groupName != null && !groupName.isEmpty()) {
             out.println("/group create " + groupName);
         } else {
-            chatArea.appendText("Group name cannot be empty.\n");
+            // chatArea.appendText("Group name cannot be empty.\n");
+            Text messageText = new Text("Group name cannot be empty.\n");
+            chatArea.getChildren().add(messageText);
+
         }
     }
 
@@ -313,9 +427,13 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
                 joinedGroups.add(groupName);  // Track that the user joined the group
                 // Notify the server about the group join event if needed
             }
-            chatArea.appendText("You joined group: " + groupName + "\n");
+            // chatArea.appendText("You joined group: " + groupName + "\n");
+            Text messageText = new Text("You joined group: " + groupName + "\n");
+            chatArea.getChildren().add(messageText);
         } else {
-            chatArea.appendText("No group selected to join.\n");
+            // chatArea.appendText("No group selected to join.\n");
+            Text messageText = new Text("No group selected to join.\n");
+            chatArea.getChildren().add(messageText);
         }
     }
 
@@ -323,16 +441,22 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
         String groupName = groupListView.getSelectionModel().getSelectedItem();
         if (groupName != null) {
             out.println("/group leave " + groupName);
-            chatArea.appendText("You left group: " + groupName + "\n");
+            // chatArea.appendText("You left group: " + groupName + "\n");
+            Text messageText = new Text("You left group: " + groupName + "\n");
+            chatArea.getChildren().add(messageText);
         } else {
-            chatArea.appendText("No group selected to leave.\n");
+            // chatArea.appendText("No group selected to leave.\n");
+            Text messageText = new Text("No group selected to leave.\n");
+            chatArea.getChildren().add(messageText);
         }
     }
 
     private void displayUserChat(String userName) {
-        chatArea.clear();
+        chatArea.getChildren().clear();
         StringBuilder chatHistory = userChats.getOrDefault(userName, new StringBuilder());
-        chatArea.appendText(chatHistory.toString());
+        // chatArea.appendText(chatHistory.toString());
+        Text messageText = new Text(chatHistory.toString());
+        chatArea.getChildren().add(messageText);
     }
 
     private void displayGroupChat(String groupName) {
@@ -340,8 +464,11 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
     if (!joinedGroups.contains(groupName)) {
         // Show a message indicating they need to join the group first
         Platform.runLater(() -> {
-            chatArea.clear();
-            chatArea.appendText("You need to join the group to view messages.");
+            // chatArea.clear();
+            chatArea.getChildren().clear();
+            // chatArea.appendText("You need to join the group to view messages.");
+            Text messageText = new Text("You need to join the group to view messages.");
+            chatArea.getChildren().add(messageText);
         });
         return;
     }
@@ -353,8 +480,9 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
     currentChatName = groupName;
 
     Platform.runLater(() -> {
-        chatArea.clear();
-        chatArea.appendText(chatHistory.toString());
+        chatArea.getChildren().clear();
+        Text messageText = new Text(chatHistory.toString());
+        chatArea.getChildren().add(messageText);
     });
 }
 
@@ -395,6 +523,8 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
                             handlePrivateMessage(message);
                         } else if (message.contains(": Group ")) {
                             handleGroupMessage(message);
+                        } else if (message.startsWith("/privateimage ")) {
+                            receiveImage(message);  // Call to handle image message
                         } else {
                             // chatArea.appendText(message + "\n");
                         }
@@ -405,6 +535,42 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
             }
         }
     }
+
+    private void receiveImage(String messageHeader) {
+    try {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        // String messageHeader = reader.readLine(); // Read header line
+        String[] tokens = messageHeader.split(" ");
+        
+        String sender = tokens[1];
+        String fileName = tokens[3];
+        int fileSize = Integer.parseInt(tokens[4]);
+
+        System.out.println("Receiving image from " + sender + ": " + fileName + " (" + fileSize + " bytes)");
+
+        // Step 2: Read the binary image data based on fileSize
+        byte[] imageData = new byte[fileSize];
+        InputStream inputStream = socket.getInputStream();
+
+        int bytesRead = 0;
+        while (bytesRead < fileSize) {
+            int result = inputStream.read(imageData, bytesRead, fileSize - bytesRead);
+            if (result == -1) break; // If end of stream is reached unexpectedly
+            bytesRead += result;
+        }
+
+        // Step 3: Check if the entire image data is received
+        if (bytesRead == fileSize) {
+            System.out.println("Image received successfully from " + sender);
+            appendImageToChat(sender, fileName, imageData, false); // Display the received image
+        } else {
+            System.out.println("Error: Incomplete image received.");
+        }
+    } catch (Exception e) {
+        // showErrorDialog("Image Reception Error", "Could not receive the image.");
+        e.printStackTrace();
+    }
+}
 
     private void updateUserList(String message) {
        // Set cell factory for userListView to customize the display of items

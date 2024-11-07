@@ -62,7 +62,33 @@ class DatabaseHelper {
         }
     }
     
-
+    public boolean saveImage(String sender, String recipient, String group, String fileName, byte[] imageData) {
+        String query = "INSERT INTO messages (sender, recipient, groupname, content, isImage) VALUES (?, ?, ?, ?, 1)";
+        try (PreparedStatement stmt = connection.prepareStatement(query)) {
+            stmt.setString(1, sender);
+            stmt.setString(2, recipient);
+            stmt.setString(3, group);
+            stmt.setBytes(4, imageData);
+            stmt.executeUpdate();
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+    
+    // Retrieve images for a user
+    public ResultSet getImagesForUser(String username) {
+        String query = "SELECT sender, recipient, groupname, content FROM messages WHERE (recipient = ? OR groupname IS NOT NULL) AND isImage = 1";
+        try {
+            PreparedStatement stmt = connection.prepareStatement(query);
+            stmt.setString(1, username);
+            return stmt.executeQuery();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
     public boolean addUser(String username, String password) {
         String query = "INSERT OR IGNORE INTO users (username, password) VALUES (?, ?);";
         String hashedPassword = hashPassword(password);
@@ -525,12 +551,16 @@ class ClientHandler implements Runnable {
                 if (message.startsWith("Private to")) {
                     String fullMessage = clientName + ": " + message;
                     handlePrivateMessage(fullMessage);
-                } else if (message.startsWith("/group")) {
+                } else if (message.startsWith("/privateimage")) {
+                    handleImageReception(message);
+                } else if (message.startsWith("/getimages")) {
+                    sendImage(clientName, null);
+                }else if (message.startsWith("/group")) {
                     handleGroupCommand(message);
                 } else if (message.startsWith("Group")){
                     sendGroupMessage(message, this);
                 } else {
-                    String fullMessage = clientName + ": " + message;
+                    String fullMessage = message;
                     broadcast(fullMessage, this);
                     dbHelper.saveMessage(clientName, null, null, fullMessage); // Save public message
                 }
@@ -601,7 +631,74 @@ class ClientHandler implements Runnable {
             out.println("Error receiving the file.");
         }
     }
+    // In ClientHandler class
+
+    private void sendImage(String recipient, String groupName) {
+        try {
+            ResultSet images = dbHelper.getImagesForUser(clientName); // Fetch user-specific images from the database
+            while (images != null && images.next()) {
+                String sender = images.getString("sender");
+                String imageName = images.getString("imageName");
+                byte[] imageData = images.getBytes("content");
     
+                // Encode image data to Base64
+                String base64Image = Base64.getEncoder().encodeToString(imageData);
+    
+                // Send metadata and encoded image data to client
+                out.println("/sendimage " + sender + " " + imageName + " " + base64Image);
+                out.flush();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            out.println("Error sending image.");
+        }
+    }
+    
+    private void handleImageReception(String message) {
+        String[] tokens = message.split(" ");
+        String recipient = tokens[2];
+        String fileName = tokens[3];
+        int fileSize = Integer.parseInt(tokens[4]);
+        try {
+            // Receive image metadata
+            for (ClientHandler client : clientHandlers) {
+                if (client.clientName.equals(recipient)) {
+                    if (client.socket == null) {
+                        System.out.println("Recipient not found.");
+                        return;
+                    }
+                    PrintWriter recipientOut = new PrintWriter(client.socket.getOutputStream(), true);
+                    recipientOut.println(message);
+
+                    InputStream senderInputStream = this.socket.getInputStream();
+                    OutputStream recipientOutputStream = client.socket.getOutputStream();
+
+                     byte[] buffer = new byte[4096];
+                     int bytesRead;
+                     int totalBytesRead = 0;
+
+                      while (totalBytesRead < fileSize && (bytesRead = senderInputStream.read(buffer)) != -1) {
+                        recipientOutputStream.write(buffer, 0, bytesRead);
+                        totalBytesRead += bytesRead;
+                      }
+                    recipientOutputStream.flush();
+                    out.println("done sending image");
+                    break;
+                }
+            }
+    
+            // Save the decoded image data to the database
+            // if (dbHelper.saveImage(clientName, recipient, groupName, fileName, imageData)) {
+            //     out.println("Image received and saved successfully.");
+            //     broadcast("Image uploaded by " + clientName, null);
+            // } else {
+            //     out.println("Failed to save the image.");
+            // }
+        } catch (IOException e) {
+            e.printStackTrace();
+            out.println("Error receiving the image.");
+        }
+    }
 
     private String formatMessage(String sender, String recipient, String group, String content) {
         if (group != null) {
