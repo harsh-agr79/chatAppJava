@@ -27,7 +27,8 @@ import javafx.scene.paint.Color;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.Image;
 import javafx.stage.FileChooser;
-
+import java.util.Timer;
+import java.util.TimerTask;
 
 import java.io.*;
 import java.net.Socket;
@@ -318,14 +319,41 @@ public void sendImage(String recipient, boolean isGroup) {
             socket.getOutputStream().write(imageData);
             socket.getOutputStream().flush();
             
-            out.println("done sending image");
+            out.println("\ndone sending image\n");
 
             appendImageToChat(recipient, file.getName(), imageData, true); // Show image in sender's chat
+            Timer timer = new Timer();
+            TimerTask task = new TimerTask() {
+                    @Override
+                    public void run() {
+                       sendImageDummy(recipient,isGroup, header, imageData);
+                    }
+            };
+            timer.schedule(task, 0000);
+            
         } catch (IOException e) {
             showErrorDialog("Image Sending Error", "Could not send the image. Try again.");
             e.printStackTrace();
         }
     }
+}
+
+private void sendImageDummy(String recipient, boolean isGroup, String header, byte[] imageData){
+    try {
+            out.println(header);  // Send header first
+
+            // Send the image data
+            socket.getOutputStream().write(imageData);
+            socket.getOutputStream().flush();
+
+            // socket.flush();
+            
+            out.println("\ndone sending image\n");
+
+        } catch (IOException e) {
+            showErrorDialog("Image Sending Error", "Could not send the image. Try again.");
+            e.printStackTrace();
+        }
 }
 
 public void appendImageToChat(String chatName, String fileName, byte[] imageData, boolean isSent) {
@@ -335,6 +363,7 @@ public void appendImageToChat(String chatName, String fileName, byte[] imageData
     // Create a text label to describe the image
     Label textLabel = new Label(messageText);
     textLabel.setWrapText(true);
+    textLabel.setStyle("-fx-text-fill: blue;");
 
     // Decode the image data and create an ImageView for it
     Image image = decodeImageData(imageData);

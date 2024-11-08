@@ -673,17 +673,19 @@ class ClientHandler implements Runnable {
                     InputStream senderInputStream = this.socket.getInputStream();
                     OutputStream recipientOutputStream = client.socket.getOutputStream();
 
-                     byte[] buffer = new byte[4096];
-                     int bytesRead;
-                     int totalBytesRead = 0;
+                    byte[] buffer = new byte[4096];
+                    int bytesRead;
+                    int totalBytesRead = 0;
 
-                      while (totalBytesRead < fileSize && (bytesRead = senderInputStream.read(buffer)) != -1) {
+                    // Loop until the entire file (specified by fileSize) is transferred
+                    while (totalBytesRead < fileSize && (bytesRead = senderInputStream.read(buffer)) != -1) {
                         recipientOutputStream.write(buffer, 0, bytesRead);
                         totalBytesRead += bytesRead;
-                      }
-                    recipientOutputStream.flush();
+                    }
+
+                    recipientOutputStream.flush();           // Ensure all data is sent
+                    // recipientOutputStream.shutdownOutput();   // Signal end of file transfer
                     out.println("done sending image");
-                    break;
                 }
             }
     
