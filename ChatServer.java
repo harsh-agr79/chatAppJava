@@ -4,6 +4,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.*;
 import java.util.*;
+import java.util.Base64;
 
 class DatabaseHelper {
 
@@ -43,52 +44,13 @@ class DatabaseHelper {
                 "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP" +
                 ");";
     
-    
-        String mediaTable = "CREATE TABLE IF NOT EXISTS media (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "sender TEXT NOT NULL, " +
-                "recipient TEXT, " +
-                "groupname TEXT, " +
-                "filename TEXT NOT NULL, " +
-                "file_data BLOB, " +
-                "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP" +
-                ");";
-    
         try (Statement stmt = connection.createStatement()) {
             stmt.execute(userTable);
             stmt.execute(messageTable);
-            stmt.execute(mediaTable);
             stmt.execute(groupTable);  // Create media table
         }
     }
-    
-    public boolean saveImage(String sender, String recipient, String group, String fileName, byte[] imageData) {
-        String query = "INSERT INTO messages (sender, recipient, groupname, content, isImage) VALUES (?, ?, ?, ?, 1)";
-        try (PreparedStatement stmt = connection.prepareStatement(query)) {
-            stmt.setString(1, sender);
-            stmt.setString(2, recipient);
-            stmt.setString(3, group);
-            stmt.setBytes(4, imageData);
-            stmt.executeUpdate();
-            return true;
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return false;
-        }
-    }
-    
-    // Retrieve images for a user
-    public ResultSet getImagesForUser(String username) {
-        String query = "SELECT sender, recipient, groupname, content FROM messages WHERE (recipient = ? OR groupname IS NOT NULL) AND isImage = 1";
-        try {
-            PreparedStatement stmt = connection.prepareStatement(query);
-            stmt.setString(1, username);
-            return stmt.executeQuery();
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
+
     public boolean addUser(String username, String password) {
         String query = "INSERT OR IGNORE INTO users (username, password) VALUES (?, ?);";
         String hashedPassword = hashPassword(password);
@@ -103,35 +65,6 @@ class DatabaseHelper {
             return false;
         }
     }
-    public boolean saveMedia(String sender, String recipient, String groupname, String filename, byte[] fileData) {
-        String query = "INSERT INTO media (sender, recipient, groupname, filename, file_data) VALUES (?, ?, ?, ?, ?);";
-        try (PreparedStatement pstmt = connection.prepareStatement(query)) {
-            pstmt.setString(1, sender);
-            pstmt.setString(2, recipient);
-            pstmt.setString(3, groupname);
-            pstmt.setString(4, filename);
-            pstmt.setBytes(5, fileData);
-            pstmt.executeUpdate();
-            return true;
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return false;
-        }
-    }
-    
-    public ResultSet getMedia(String username) {
-        String query = "SELECT * FROM media WHERE sender = ? OR recipient = ? ORDER BY timestamp;";
-        try {
-            PreparedStatement pstmt = connection.prepareStatement(query);
-            pstmt.setString(1, username);
-            pstmt.setString(2, username);
-            return pstmt.executeQuery();
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-    
 
     public boolean authenticateUser(String username, String password) {
         String query = "SELECT password FROM users WHERE username = ?;";
@@ -553,8 +486,8 @@ class ClientHandler implements Runnable {
                     handlePrivateMessage(fullMessage);
                 } else if (message.startsWith("/privateimage")) {
                     handleImageReception(message);
-                } else if (message.startsWith("/getimages")) {
-                    sendImage(clientName, null);
+                } else if (message.startsWith("/groupimage")) {
+                    handleImageReceptionGroup(message);
                 }else if (message.startsWith("/group")) {
                     handleGroupCommand(message);
                 } else if (message.startsWith("Group")){
@@ -607,100 +540,108 @@ class ClientHandler implements Runnable {
             e.printStackTrace();
         }
     }
-    private void handleFileTransfer(String fileName) {
-        try {
-            // Create an output stream to save the file
-            FileOutputStream fileOutputStream = new FileOutputStream("uploads/" + fileName);
-            byte[] buffer = new byte[4096];
-            int bytesRead;
     
-            // Read the incoming file data
-            while ((bytesRead = socket.getInputStream().read(buffer)) > 0) {
-                fileOutputStream.write(buffer, 0, bytesRead);
-                if (bytesRead < buffer.length) {
-                    break; // Break when file reading is complete
-                }
-            }
-    
-            fileOutputStream.close();
-            System.out.println("File " + fileName + " received successfully.");
-            broadcast("File " + fileName + " uploaded by " + clientName, null);
-            
-        } catch (IOException e) {
-            e.printStackTrace();
-            out.println("Error receiving the file.");
-        }
-    }
-    // In ClientHandler class
+    private void handleImageReceptionGroup(String message) {
+     try {
+        // Split the message into header and base64 data
+        String[] parts = message.split(":", 2); // Split message into two parts: header and base64 data
+        String header = parts[0];
+        String base64ImageData = parts[1];
 
-    private void sendImage(String recipient, String groupName) {
-        try {
-            ResultSet images = dbHelper.getImagesForUser(clientName); // Fetch user-specific images from the database
-            while (images != null && images.next()) {
-                String sender = images.getString("sender");
-                String imageName = images.getString("imageName");
-                byte[] imageData = images.getBytes("content");
-    
-                // Encode image data to Base64
-                String base64Image = Base64.getEncoder().encodeToString(imageData);
-    
-                // Send metadata and encoded image data to client
-                out.println("/sendimage " + sender + " " + imageName + " " + base64Image);
-                out.flush();
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            out.println("Error sending image.");
-        }
-    }
-    
-    private void handleImageReception(String message) {
-        String[] tokens = message.split(" ");
+        // Parse the header for metadata (sender, recipient, filename, etc.)
+        String[] tokens = header.split(" ");
+        String sender = tokens[1];
         String recipient = tokens[2];
         String fileName = tokens[3];
-        int fileSize = Integer.parseInt(tokens[4]);
-        try {
-            // Receive image metadata
-            for (ClientHandler client : clientHandlers) {
-                if (client.clientName.equals(recipient)) {
-                    if (client.socket == null) {
-                        System.out.println("Recipient not found.");
-                        return;
-                    }
-                    PrintWriter recipientOut = new PrintWriter(client.socket.getOutputStream(), true);
-                    recipientOut.println(message);
 
-                    InputStream senderInputStream = this.socket.getInputStream();
-                    OutputStream recipientOutputStream = client.socket.getOutputStream();
-
-                    byte[] buffer = new byte[4096];
-                    int bytesRead;
-                    int totalBytesRead = 0;
-
-                    // Loop until the entire file (specified by fileSize) is transferred
-                    while (totalBytesRead < fileSize && (bytesRead = senderInputStream.read(buffer)) != -1) {
-                        recipientOutputStream.write(buffer, 0, bytesRead);
-                        totalBytesRead += bytesRead;
+        // Find recipient client handler
+        if (groups.containsKey(recipient)) {
+            for (ClientHandler client : groups.get(recipient)) {
+                if(client != this){
+                    ClientHandler recipientHandler = client;
+                    if (recipientHandler == null || recipientHandler.socket == null) {
+                        System.out.println("Recipient not connected.");
+                        continue;
                     }
 
-                    recipientOutputStream.flush();           // Ensure all data is sent
-                    // recipientOutputStream.shutdownOutput();   // Signal end of file transfer
-                    out.println("done sending image");
+                    String fullMessage = header + ":" + base64ImageData;
+
+                    // Forward the complete message (header + base64 data) to the recipient
+                    PrintWriter recipientOut = new PrintWriter(recipientHandler.socket.getOutputStream(), true);
+                    recipientOut.println(fullMessage);  // Send header and base64 image data together
+                    recipientOut.flush();
+
+                    System.out.println("Image forwarded to recipient: " + recipient);
                 }
             }
-    
-            // Save the decoded image data to the database
-            // if (dbHelper.saveImage(clientName, recipient, groupName, fileName, imageData)) {
-            //     out.println("Image received and saved successfully.");
-            //     broadcast("Image uploaded by " + clientName, null);
-            // } else {
-            //     out.println("Failed to save the image.");
-            // }
-        } catch (IOException e) {
-            e.printStackTrace();
-            out.println("Error receiving the image.");
+        } else {
+            out.println("Group " + recipient + " does not exist.");
+        }
+
+        String msg = sender + ": Group "+recipient+": @imagedata|"+base64ImageData;
+
+        dbHelper.saveMessage(clientName, null, recipient, msg);
+
+        // Combine the header and image data into one message for forwarding
+        
+        
+    } catch (IOException e) {
+        System.out.println("Error receiving or forwarding base64 image.");
+        e.printStackTrace();
+    }
+
+}
+
+ private void handleImageReception(String message) {
+     try {
+        // Split the message into header and base64 data
+        String[] parts = message.split(":", 2); // Split message into two parts: header and base64 data
+        String header = parts[0];
+        String base64ImageData = parts[1];
+
+        // Parse the header for metadata (sender, recipient, filename, etc.)
+        String[] tokens = header.split(" ");
+        String sender = tokens[1];
+        String recipient = tokens[2];
+        String fileName = tokens[3];
+
+        // Find recipient client handler
+        ClientHandler recipientHandler = findClientByName(recipient);
+        if (recipientHandler == null || recipientHandler.socket == null) {
+            System.out.println("Recipient not connected.");
+            return;
+        }
+
+        String msg = sender + ": Private to "+recipient+": @imagedata|"+base64ImageData;
+
+        dbHelper.saveMessage(clientName, recipient, null, msg);
+
+        // Combine the header and image data into one message for forwarding
+        String fullMessage = header + ":" + base64ImageData;
+
+        // Forward the complete message (header + base64 data) to the recipient
+        PrintWriter recipientOut = new PrintWriter(recipientHandler.socket.getOutputStream(), true);
+        recipientOut.println(fullMessage);  // Send header and base64 image data together
+        recipientOut.flush();
+
+        System.out.println("Image forwarded to recipient: " + recipient);
+        
+    } catch (IOException e) {
+        System.out.println("Error receiving or forwarding base64 image.");
+        e.printStackTrace();
+    }
+
+}
+
+
+    private ClientHandler findClientByName(String name) {
+    for (ClientHandler client : clientHandlers) {
+        if (client.clientName.equals(name)) {
+            return client;
         }
     }
+    return null;
+}
 
     private String formatMessage(String sender, String recipient, String group, String content) {
         if (group != null) {

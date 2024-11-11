@@ -29,6 +29,7 @@ import javafx.scene.image.Image;
 import javafx.stage.FileChooser;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.Base64;
 
 import java.io.*;
 import java.net.Socket;
@@ -44,6 +45,7 @@ public class ChatClient extends Application {
     private BufferedReader in;
 
     private VBox chatArea;
+    private ScrollPane scrollPane;
     private TextField messageInput;
     private ListView<String> userListView;
     private ListView<String> groupListView;
@@ -73,7 +75,7 @@ public void start(Stage primaryStage) {
     chatArea.setPadding(new Insets(10));
     chatArea.setStyle("-fx-background-color: #f4f4f4;");
 
-    ScrollPane scrollPane = new ScrollPane(chatArea);
+    scrollPane = new ScrollPane(chatArea);
     scrollPane.setFitToWidth(true); // Makes the chatArea fit the width of the ScrollPane
     scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED); // Show scrollbar only when needed
     scrollPane.setStyle("-fx-background-color: transparent;");
@@ -84,6 +86,7 @@ public void start(Stage primaryStage) {
         if (event.getCode() == KeyCode.ENTER) {
             sendMessage();
             event.consume();  // Prevents adding a new line in the text field
+            scrollToBottom();
         }
     });
 
@@ -94,6 +97,7 @@ public void start(Stage primaryStage) {
     sendImageButton.setOnAction(e -> {
         if (currentChatName != null) {
             sendImage(currentChatName, currentChatType.equals("group"));
+            scrollToBottom();
         } else {
             Text messageText = new Text("Select a user or group to send an image.\n");
             chatArea.getChildren().add(messageText);
@@ -176,6 +180,12 @@ public void start(Stage primaryStage) {
 
     // Now connect to the server and start the listener thread
     connectToServer("10.17.235.2", 8000); // Use your server's IP address here
+}
+
+private void scrollToBottom() {
+    // System.out.println("scrolltobottom");
+    Platform.runLater(() -> scrollPane.setVvalue(1.5));  // Scroll to the bottom
+    scrollPane.setVvalue(1.5);
 }
 
 
@@ -261,6 +271,7 @@ public void start(Stage primaryStage) {
                 // Send a private message
                 out.println("Private to " + currentChatName + ": " + message);
                 appendToUserChat(currentChatName, message, true);  // Just "You: message"
+                scrollToBottom();
             } else if (currentChatType.equals("group")) {
                 // Send a group message
                if (joinedGroups.contains(currentChatName)) {
@@ -282,107 +293,161 @@ public void start(Stage primaryStage) {
             chatArea.getChildren().add(messageText);
         }
         messageInput.clear();
+        scrollToBottom();
     }
 }
+private void applyChatBubbleStyle(VBox messageBox, String sender) {
+    // Apply bubble style to sent and received messages
+    if (sender.equals("You") || sender.contains("You")) {
+        // Sent messages - aligned to the right with a green bubble
+        messageBox.setStyle("-fx-alignment: center-right; "
+                            + "-fx-background-color: #A8D5BA; "
+                            + "-fx-background-radius: 15px; "
+                            + "-fx-padding: 10px; "
+                            + "-fx-text-fill: white;");
+    } else {
+        // Received messages - aligned to the left with a white bubble
+        messageBox.setStyle("-fx-alignment: center-left; "
+                            + "-fx-background-color: white; "
+                            + "-fx-background-radius: 15px; "
+                            + "-fx-padding: 10px; "
+                            + "-fx-border-color: #ccc; "
+                            + "-fx-border-radius: 15px; "
+                            + "-fx-text-fill: black;");
+    }
+    scrollToBottom();
+}
 
-    private void appendToUserChat(String userName, String message, boolean isSent) {
+   public void appendToUserChat(String userName, String message, boolean isSent) {
     StringBuilder chatHistory = userChats.computeIfAbsent(userName, k -> new StringBuilder());
-    
+
+    String sender = isSent ? "You" : userName;
+
     String formattedMessage = isSent
             ? "You: " + message // Fix the formatting for sent messages
             : userName + ": " + message;
 
     chatHistory.append(formattedMessage).append("\n");
     System.out.println("Appended to " + userName + "'s chat: " + formattedMessage); // Debug statement
-
+    scrollToBottom();
     if (currentChatType != null && currentChatType.equals("user") && currentChatName.equals(userName)) {
-        Text messageText = new Text(formattedMessage + "\n");
-        Platform.runLater(() ->  chatArea.getChildren().add(messageText));
+        // Create a VBox to hold the sender's name and the message
+        VBox messageBox = new VBox();
+        messageBox.setSpacing(5);  // Add space between sender and message text
+
+        // Create the sender's name text
+        Text senderTextNode = new Text(formattedMessage);
+        senderTextNode.setStyle("-fx-font-weight: bold;");
+        messageBox.getChildren().add(senderTextNode);
+
+        // Apply chat bubble style based on sender
+        applyChatBubbleStyle(messageBox, sender);
+
+        // Use Platform.runLater to update the UI on the JavaFX Application Thread
+        Platform.runLater(() -> {
+            chatArea.getChildren().add(messageBox);  // Add the message box to the chat area
+            scrollToBottom();
+        });
+        scrollToBottom();
     }
+     scrollToBottom();
 }
 
+
 public void sendImage(String recipient, boolean isGroup) {
-    FileChooser fileChooser = new FileChooser();
+  FileChooser fileChooser = new FileChooser();
     fileChooser.setTitle("Select Image");
     fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Image Files", "*.png", "*.jpg", "*.jpeg", "*.gif"));
 
     File file = fileChooser.showOpenDialog(null);
     if (file != null) {
         try {
+            // Read image file into byte array
             byte[] imageData = Files.readAllBytes(file.toPath());
 
+            // Encode image data to base64
+            String base64Image = Base64.getEncoder().encodeToString(imageData);
+
             // Prepare the message header
-            String header = (isGroup ? "/groupimage " : "/privateimage ")+clientName+" " + recipient + " " + file.getName() + " " + imageData.length;
-            out.println(header);  // Send header first
-
-            // Send the image data
-            socket.getOutputStream().write(imageData);
-            socket.getOutputStream().flush();
+            String header = (isGroup ? "/groupimage " : "/privateimage ") + clientName + " " + recipient + " " + file.getName() + " " + base64Image.length();
             
-            out.println("\ndone sending image\n");
+            // Combine header and base64 image data into one message
+             String message = header + ":" + base64Image;
+            if(isGroup){
 
-            appendImageToChat(recipient, file.getName(), imageData, true); // Show image in sender's chat
-            Timer timer = new Timer();
-            TimerTask task = new TimerTask() {
-                    @Override
-                    public void run() {
-                       sendImageDummy(recipient,isGroup, header, imageData);
-                    }
-            };
-            timer.schedule(task, 0000);
+                StringBuilder chatHistory = groupChats.computeIfAbsent(recipient, k -> new StringBuilder());
+        
+                String formattedMessage = "[" + recipient + "] "+" You: @imagedata|" + base64Image; // Fix the formatting for sent messages
+
+                chatHistory.append(formattedMessage).append("\n");
+            }
+            else{
+
+                StringBuilder chatHistory = userChats.computeIfAbsent(recipient, k -> new StringBuilder());
+        
+                String formattedMessage = "You: @imagedata|" + base64Image; // Fix the formatting for sent messages
+
+                chatHistory.append(formattedMessage).append("\n");
+            }
             
+
+            // Send the complete message (header + base64 image) in one go
+            System.out.println(message);
+            out.println(message);
+            // out.flush();
+
+            System.out.println("Image sent as base64.");
+
+            // Display image in sender's chat
+            appendImageToChat(recipient, file.getName(), imageData, true);
+            scrollToBottom();
         } catch (IOException e) {
             showErrorDialog("Image Sending Error", "Could not send the image. Try again.");
             e.printStackTrace();
         }
+         scrollToBottom();
     }
-}
-
-private void sendImageDummy(String recipient, boolean isGroup, String header, byte[] imageData){
-    try {
-            out.println(header);  // Send header first
-
-            // Send the image data
-            socket.getOutputStream().write(imageData);
-            socket.getOutputStream().flush();
-
-            // socket.flush();
-            
-            out.println("\ndone sending image\n");
-
-        } catch (IOException e) {
-            showErrorDialog("Image Sending Error", "Could not send the image. Try again.");
-            e.printStackTrace();
-        }
+     scrollToBottom();
 }
 
 public void appendImageToChat(String chatName, String fileName, byte[] imageData, boolean isSent) {
     String senderText = isSent ? "You" : chatName;
-    String messageText = senderText + " sent an image: " + fileName;
+    String messageText = senderText + ": ";
 
-    // Create a text label to describe the image
-    Label textLabel = new Label(messageText);
-    textLabel.setWrapText(true);
-    textLabel.setStyle("-fx-text-fill: blue;");
+    // Create a VBox to hold the sender's name and the image
+    VBox messageBox = new VBox();
+    messageBox.setSpacing(5);  // Add space between sender and image
+
+    // Display the sender's name
+    Text senderTextNode = new Text(messageText);
+    senderTextNode.setStyle("-fx-font-weight: bold;");
+    messageBox.getChildren().add(senderTextNode);
 
     // Decode the image data and create an ImageView for it
     Image image = decodeImageData(imageData);
     if (image == null) return; // Stop if image decoding failed
 
     ImageView imageView = new ImageView(image);
-    imageView.setFitWidth(100);  // Set a smaller width for thumbnail view
+    imageView.setFitWidth(200);  // Set max width to 200px
     imageView.setPreserveRatio(true);
-
-    // Add click event to open the image in a new window when clicked
     imageView.setOnMouseClicked(event -> openImageInNewWindow(image, fileName));
 
+    // Add the image to the VBox
+    messageBox.getChildren().add(imageView);
+
+    // Apply chat bubble style based on sender
+    applyChatBubbleStyle(messageBox, senderText);
+    scrollToBottom();
     // Use Platform.runLater to update the UI on the JavaFX Application Thread
     Platform.runLater(() -> {
-        VBox chatItem = new VBox(textLabel, imageView);
-        chatItem.setSpacing(5);
-        chatArea.getChildren().add(chatItem);  // Add both label and thumbnail to VBox
+        chatArea.getChildren().add(messageBox);  // Add both label and image to VBox
+        scrollToBottom();
+         scrollToBottom();
+          scrollToBottom();
     });
+    scrollToBottom();
 }
+
 
 private void openImageInNewWindow(Image image, String fileName) {
     Stage imageStage = new Stage();
@@ -414,19 +479,52 @@ private Image decodeImageData(byte[] imageData) {
 }
 
 
+// private void appendToGroupChat(String groupName, String message, boolean isSent) {
+//     StringBuilder chatHistory = groupChats.computeIfAbsent(groupName, k -> new StringBuilder());
+    
+//     String formattedMessage = isSent
+//             ? "You: " + message // Fix the formatting for sent messages
+//             : "[" + groupName + "] " + message;
+
+//     chatHistory.append(formattedMessage).append("\n");
+//     System.out.println("Appended to " + groupName + " chat: " + formattedMessage); // Debug statement
+
+//     if (currentChatType != null && currentChatType.equals("group") && currentChatName.equals(groupName)) {
+//          Text messageText = new Text(formattedMessage + "\n");
+//         Platform.runLater(() ->  chatArea.getChildren().add(messageText));
+//     }
+// }
+
 private void appendToGroupChat(String groupName, String message, boolean isSent) {
     StringBuilder chatHistory = groupChats.computeIfAbsent(groupName, k -> new StringBuilder());
-    
+
+    String sender = isSent ? "You" : "[" + groupName + "]";
+
     String formattedMessage = isSent
-            ? "You: " + message // Fix the formatting for sent messages
+            ? "You: " + message // Format sent messages
             : "[" + groupName + "] " + message;
 
     chatHistory.append(formattedMessage).append("\n");
     System.out.println("Appended to " + groupName + " chat: " + formattedMessage); // Debug statement
 
     if (currentChatType != null && currentChatType.equals("group") && currentChatName.equals(groupName)) {
-         Text messageText = new Text(formattedMessage + "\n");
-        Platform.runLater(() ->  chatArea.getChildren().add(messageText));
+        // Create a VBox to hold the sender's name and the message
+        VBox messageBox = new VBox();
+        messageBox.setSpacing(5);  // Add space between sender and message text
+
+        // Create the sender's name text
+        Text senderTextNode = new Text(formattedMessage);
+        senderTextNode.setStyle("-fx-font-weight: bold;");
+        messageBox.getChildren().add(senderTextNode);
+
+        // Apply chat bubble style based on sender
+        applyChatBubbleStyle(messageBox, sender);
+
+        // Use Platform.runLater to update the UI on the JavaFX Application Thread
+        Platform.runLater(() -> {
+            chatArea.getChildren().add(messageBox);  // Add the message box to the chat area
+            scrollToBottom();
+        });
     }
 }
 
@@ -480,39 +578,160 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
         }
     }
 
-    private void displayUserChat(String userName) {
-        chatArea.getChildren().clear();
-        StringBuilder chatHistory = userChats.getOrDefault(userName, new StringBuilder());
-        // chatArea.appendText(chatHistory.toString());
-        Text messageText = new Text(chatHistory.toString());
-        chatArea.getChildren().add(messageText);
+  private void displayUserChat(String userName) {
+    chatArea.getChildren().clear();  // Clear current chat history
+    StringBuilder chatHistory = userChats.getOrDefault(userName, new StringBuilder());
+    
+    // Split the chat content into individual messages
+    String chatContent = chatHistory.toString();
+    String[] messages = chatContent.split("\n");
+
+    for (String message : messages) {
+        if (message.contains("@imagedata|")) {
+            // Extract the sender and base64 image data
+            String[] parts = message.split("@imagedata\\|");
+            if (parts.length > 1) {
+                String sender = message.split(":")[0];  // Get the sender's name
+                String base64ImageData = parts[1];
+
+                // Create a VBox to hold the sender's name and the image
+                VBox messageBox = new VBox();
+                messageBox.setSpacing(5);  // Add space between sender and image
+
+                // Display the sender's name
+                Text senderText = new Text(sender + ": ");
+                senderText.setStyle("-fx-font-weight: bold;");
+                messageBox.getChildren().add(senderText);
+
+                applyChatBubbleStyle(messageBox, sender);
+
+                try {
+                    // Decode the base64 image data
+                    byte[] imageData = Base64.getDecoder().decode(base64ImageData);
+
+                    // Convert the byte array to an image
+                    ByteArrayInputStream bis = new ByteArrayInputStream(imageData);
+                    Image image = new Image(bis);
+                    ImageView imageView = new ImageView(image);
+                    imageView.setFitWidth(200);  // Set max width to 200px
+                    imageView.setPreserveRatio(true);
+                    imageView.setOnMouseClicked(event -> openImageInNewWindow(image, "image"));
+
+                    // Add the image to the VBox
+                    messageBox.getChildren().add(imageView);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    System.out.println("Error decoding base64 image.");
+                }
+
+                // Check if the message is sent or received
+               
+
+                // Add the styled message box to the chat area
+                chatArea.getChildren().add(messageBox);
+            }
+        } else {
+            // For normal text messages, display as text
+            String sender = message.split(":")[0];  // Extract sender's name
+            String messageText = message.substring(message.indexOf(":") + 1).trim();  // Get the message part
+
+            // Create a VBox to hold the sender and the message
+            VBox messageBox = new VBox();
+            messageBox.setSpacing(5);  // Add space between sender and message text
+
+            // Create the sender's name text
+            Text senderText = new Text(sender + ": ");
+            senderText.setStyle("-fx-font-weight: bold;");
+            messageBox.getChildren().add(senderText);
+
+            // Create the message text
+            Text messageTextNode = new Text(messageText);
+            messageBox.getChildren().add(messageTextNode);
+
+            // Check if the message is sent or received
+            applyChatBubbleStyle(messageBox, sender);
+
+            // Add the styled message box to the chat area
+            chatArea.getChildren().add(messageBox);
+        }
     }
+    scrollToBottom();
+}
 
     private void displayGroupChat(String groupName) {
     // Check if the user has joined the group
     if (!joinedGroups.contains(groupName)) {
-        // Show a message indicating they need to join the group first
         Platform.runLater(() -> {
-            // chatArea.clear();
             chatArea.getChildren().clear();
-            // chatArea.appendText("You need to join the group to view messages.");
             Text messageText = new Text("You need to join the group to view messages.");
             chatArea.getChildren().add(messageText);
         });
         return;
     }
 
-    // If the user is part of the group, display the chat
-    StringBuilder chatHistory = groupChats.getOrDefault(groupName, new StringBuilder());
-    
-    currentChatType = "group";
-    currentChatName = groupName;
+    chatArea.getChildren().clear();  // Clear current chat history
+    StringBuilder groupChatHistory = groupChats.getOrDefault(groupName, new StringBuilder());
 
-    Platform.runLater(() -> {
-        chatArea.getChildren().clear();
-        Text messageText = new Text(chatHistory.toString());
-        chatArea.getChildren().add(messageText);
-    });
+    // Split the chat content into individual messages
+    String chatContent = groupChatHistory.toString();
+    String[] messages = chatContent.split("\n");
+
+    for (String message : messages) {
+        if (message.contains("@imagedata|")) {
+            // Extract the sender and base64 image data
+            String[] parts = message.split("@imagedata\\|");
+            if (parts.length > 1) {
+                String sender = message.split(":")[0];  // Get the sender's name
+                String base64ImageData = parts[1];
+
+                VBox messageBox = new VBox();
+                messageBox.setSpacing(5);  // Add space between sender and image
+
+                // Display the sender's name
+                Text senderText = new Text(sender + ": ");
+                senderText.setStyle("-fx-font-weight: bold;");
+                messageBox.getChildren().add(senderText);
+
+                applyChatBubbleStyle(messageBox, sender);
+
+                try {
+                    byte[] imageData = Base64.getDecoder().decode(base64ImageData);
+                    ByteArrayInputStream bis = new ByteArrayInputStream(imageData);
+                    Image image = new Image(bis);
+                    ImageView imageView = new ImageView(image);
+                    imageView.setFitWidth(200);  // Set max width to 200px
+                    imageView.setPreserveRatio(true);
+                    imageView.setOnMouseClicked(event -> openImageInNewWindow(image, "image"));
+                    messageBox.getChildren().add(imageView);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    System.out.println("Error decoding base64 image.");
+                }
+
+                chatArea.getChildren().add(messageBox);  // Add the styled message box to chat area
+            }
+        } else {
+            // Process regular text messages
+            String sender = message.split(":")[0];
+            String messageText = message.substring(message.indexOf(":") + 1).trim();
+
+            VBox messageBox = new VBox();
+            messageBox.setSpacing(5);  // Add space between sender and message text
+
+            Text senderText = new Text(sender + ": ");
+            senderText.setStyle("-fx-font-weight: bold;");
+            messageBox.getChildren().add(senderText);
+
+            Text messageTextNode = new Text(messageText);
+            messageBox.getChildren().add(messageTextNode);
+
+            applyChatBubbleStyle(messageBox, sender);
+
+            chatArea.getChildren().add(messageBox);  // Add to chat area
+        }
+    }
+
+    scrollToBottom();  // Scroll to bottom after loading chat
 }
 
 
@@ -538,7 +757,7 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
         public void run() {
             try {
                 String serverMessage;
-                while ((serverMessage = in.readLine()) != null) {
+               while ((serverMessage = in.readLine()) != null) {
                     final String message = serverMessage;
                     System.out.println(message);
                     Platform.runLater(() -> {
@@ -550,56 +769,104 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
                             updateJoinedGroupList(message);
                         } else if (message.contains("Private to")) {
                             handlePrivateMessage(message);
+                            scrollToBottom();
                         } else if (message.contains(": Group ")) {
                             handleGroupMessage(message);
                         } else if (message.startsWith("/privateimage ")) {
                             receiveImage(message);  // Call to handle image message
+                            scrollToBottom();
+                        } else if (message.startsWith("/groupimage ")) {
+                            receiveImageGroup(message);  // Call to handle image message
+                            scrollToBottom();
                         } else {
                             // chatArea.appendText(message + "\n");
+                            scrollToBottom();
                         }
                     });
                 }
+               
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
     }
 
-    private void receiveImage(String messageHeader) {
+private void receiveImage(String message) {
     try {
-        BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        // String messageHeader = reader.readLine(); // Read header line
-        String[] tokens = messageHeader.split(" ");
-        
+        // Split the message into header and base64 data
+        String[] parts = message.split(":", 2); // Split into two parts: header and base64 data
+        String header = parts[0];
+        String base64ImageData = parts[1];
+
+        // Parse the header for metadata
+        String[] tokens = header.split(" ");
         String sender = tokens[1];
         String fileName = tokens[3];
-        int fileSize = Integer.parseInt(tokens[4]);
 
-        System.out.println("Receiving image from " + sender + ": " + fileName + " (" + fileSize + " bytes)");
+        StringBuilder chatHistory = userChats.computeIfAbsent(sender, k -> new StringBuilder());
+    
+        String formattedMessage = sender+": @imagedata|" + base64ImageData; // Fix the formatting for sent messages
 
-        // Step 2: Read the binary image data based on fileSize
-        byte[] imageData = new byte[fileSize];
-        InputStream inputStream = socket.getInputStream();
+        chatHistory.append(formattedMessage).append("\n");
 
-        int bytesRead = 0;
-        while (bytesRead < fileSize) {
-            int result = inputStream.read(imageData, bytesRead, fileSize - bytesRead);
-            if (result == -1) break; // If end of stream is reached unexpectedly
-            bytesRead += result;
-        }
+        // Decode the base64 string into image data
+        byte[] imageData = Base64.getDecoder().decode(base64ImageData);
 
-        // Step 3: Check if the entire image data is received
-        if (bytesRead == fileSize) {
-            System.out.println("Image received successfully from " + sender);
-            appendImageToChat(sender, fileName, imageData, false); // Display the received image
-        } else {
-            System.out.println("Error: Incomplete image received.");
-        }
+        // Convert byte array to an image and display it
+        ByteArrayInputStream bis = new ByteArrayInputStream(imageData);
+        Image image = new Image(bis);
+        ImageView imageView = new ImageView(image);
+
+        // Display the image in the chat
+        appendImageToChat(sender, fileName, imageData, false);
+
+        System.out.println("Image received from " + sender);
+
     } catch (Exception e) {
-        // showErrorDialog("Image Reception Error", "Could not receive the image.");
         e.printStackTrace();
+        System.out.println("Error decoding base64 image.");
     }
 }
+
+private void receiveImageGroup(String message) {
+    try {
+        // Split the message into header and base64 data
+        String[] parts = message.split(":", 2); // Split into two parts: header and base64 data
+        String header = parts[0];
+        String base64ImageData = parts[1];
+
+        // Parse the header for metadata
+        String[] tokens = header.split(" ");
+        String sender = tokens[1];
+        String group = tokens[2];
+        String fileName = tokens[3];
+
+        StringBuilder chatHistory = groupChats.computeIfAbsent(group, k -> new StringBuilder());
+    
+        String formattedMessage = "[" + group + "] "+ sender +": @imagedata|" + base64ImageData; // Fix the formatting for sent messages
+
+        chatHistory.append(formattedMessage).append("\n");
+
+        // Decode the base64 string into image data
+        byte[] imageData = Base64.getDecoder().decode(base64ImageData);
+
+        // Convert byte array to an image and display it
+        ByteArrayInputStream bis = new ByteArrayInputStream(imageData);
+        Image image = new Image(bis);
+        ImageView imageView = new ImageView(image);
+
+        // Display the image in the chat
+        appendImageToChat(sender, fileName, imageData, false);
+
+        System.out.println("Image received from " + sender);
+
+    } catch (Exception e) {
+        e.printStackTrace();
+        System.out.println("Error decoding base64 image.");
+    }
+}
+
+
 
     private void updateUserList(String message) {
        // Set cell factory for userListView to customize the display of items
@@ -740,12 +1007,14 @@ private void appendToGroupChat(String groupName, String message, boolean isSent)
     if (recipient.equals(clientName)) {
         // Store the received message in the sender's chat history
         appendToUserChat(sender, actualMessage, false); // false indicates this is a received message
+        scrollToBottom();
     }
 
     // If the current chat is with the sender, append to the chat area
     if (currentChatType.equals("user") && currentChatName.equals(sender)) {
         // displayUserChat(sender);
     }
+    
 }
 private void handleGroupMessage(String message) {
     // System.out.println("Received message: " + message);
