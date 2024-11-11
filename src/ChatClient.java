@@ -1076,7 +1076,7 @@ private void handleGroupMessage(String message) {
     // Display the message in the active group chat if the chat matches the group name
     if (currentChatType.equals("group") && currentChatName.equals(group)) {
         // Update the display of the active chat
-        displayGroupChat(group);
+        // displayGroupChat(group);
     }
 }
 }
