@@ -98,7 +98,7 @@ class DatabaseHelper {
     }
     public List<String> getGroupNames() {
         List<String> groupNames = new ArrayList<>();
-        String query = "SELECT groupname FROM groups"; // Adjust table/column names to match your database schema
+        String query = "SELECT groupname FROM groups";
 
         try (PreparedStatement statement = connection.prepareStatement(query);
              ResultSet resultSet = statement.executeQuery()) {
@@ -110,33 +110,30 @@ class DatabaseHelper {
 
         } catch (SQLException e) {
             e.printStackTrace();
-            // Handle exceptions (e.g., logging)
         }
-
         return groupNames;
     }
+
     public List<String> getUserGroups(String username) {
-    List<String> userGroups = new ArrayList<>();
-    String query = "SELECT groupname, groupmembers FROM groups";
+        List<String> userGroups = new ArrayList<>();
+        String query = "SELECT groupname, groupmembers FROM groups";
 
-    try (Statement statement = connection.createStatement();
-         ResultSet resultSet = statement.executeQuery(query)) {
+        try (Statement statement = connection.createStatement();
+            ResultSet resultSet = statement.executeQuery(query)) {
 
-        while (resultSet.next()) {
-            String groupName = resultSet.getString("groupname");
-            String members = resultSet.getString("groupmembers");
+            while (resultSet.next()) {
+                String groupName = resultSet.getString("groupname");
+                String members = resultSet.getString("groupmembers");
 
-            // Check if the username is in the comma-separated list of members
-            List<String> memberList = Arrays.asList(members.split(","));
-            if (memberList.contains(username)) {
-                userGroups.add(groupName);
+                List<String> memberList = Arrays.asList(members.split(","));
+                if (memberList.contains(username)) {
+                    userGroups.add(groupName);
+                }
             }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
-    } catch (SQLException e) {
-        e.printStackTrace();
-        // Handle exceptions, e.g., logging
-    }
-    return userGroups;
+        return userGroups;
     }
 
 
@@ -155,91 +152,81 @@ class DatabaseHelper {
 
    
     public ResultSet getUserMessages(String username) {
-    // Retrieve the groups the user has joined
-    List<String> userGroups = getUserGroups(username);
-    String groupPlaceholders = String.join(",", Collections.nCopies(userGroups.size(), "?"));
+        List<String> userGroups = getUserGroups(username);
+        String groupPlaceholders = String.join(",", Collections.nCopies(userGroups.size(), "?"));
 
-    // Modify query to include the restriction and load messages accordingly
-    String query = "SELECT * FROM messages " +
-                   "WHERE ((sender = ? OR recipient = ?) " +
-                   "OR (groupname IS NOT NULL AND groupname IN (" + groupPlaceholders + "))) " +
-                   "AND ((recipient IS NOT NULL AND groupname IS NULL) " +
-                   "OR (recipient IS NULL AND groupname IS NOT NULL)) " +
-                   "ORDER BY timestamp;";
+        String query = "SELECT * FROM messages " +
+                    "WHERE ((sender = ? OR recipient = ?) " +
+                    "OR (groupname IS NOT NULL AND groupname IN (" + groupPlaceholders + "))) " +
+                    "AND ((recipient IS NOT NULL AND groupname IS NULL) " +
+                    "OR (recipient IS NULL AND groupname IS NOT NULL)) " +
+                    "ORDER BY timestamp;";
 
-    try {
-        PreparedStatement pstmt = connection.prepareStatement(query);
-        pstmt.setString(1, username);
-        pstmt.setString(2, username);
+        try {
+            PreparedStatement pstmt = connection.prepareStatement(query);
+            pstmt.setString(1, username);
+            pstmt.setString(2, username);
 
-        // Set group names in the placeholders dynamically
-        int index = 3; // Start setting group names from the 3rd placeholder
-        for (String group : userGroups) {
-            pstmt.setString(index++, group);
+            int index = 3;
+            for (String group : userGroups) {
+                pstmt.setString(index++, group);
+            }
+
+            return pstmt.executeQuery();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
         }
-
-        return pstmt.executeQuery();
-    } catch (SQLException e) {
-        e.printStackTrace();
-        return null;
     }
-}
 
-public ResultSet getGroupMessages(String username) {
-    // Retrieve the groups the user has joined
-    List<String> userGroups = getUserGroups(username);
-    
-    if (userGroups.isEmpty()) {
-        return null; // If the user is not part of any groups, return null or handle accordingly
-    }
-    
-    // Create placeholders for the groups in the SQL query
-    String groupPlaceholders = String.join(",", Collections.nCopies(userGroups.size(), "?"));
-    
-    // SQL query to retrieve only group messages for the groups the user is part of
-    String query = "SELECT * FROM messages " +
-                   "WHERE groupname IS NOT NULL " +
-                   "AND groupname IN (" + groupPlaceholders + ") " +
-                   "ORDER BY timestamp;";
-    
-    try {
-        PreparedStatement pstmt = connection.prepareStatement(query);
-        
-        // Set group names dynamically in the placeholders
-        int index = 1;
-        for (String group : userGroups) {
-            pstmt.setString(index++, group);
+    public ResultSet getGroupMessages(String username) {
+        List<String> userGroups = getUserGroups(username);
+        if (userGroups.isEmpty()) {
+            return null;
         }
+        String groupPlaceholders = String.join(",", Collections.nCopies(userGroups.size(), "?"));
+        String query = "SELECT * FROM messages " +
+                    "WHERE groupname IS NOT NULL " +
+                    "AND groupname IN (" + groupPlaceholders + ") " +
+                    "ORDER BY timestamp;";
         
-        return pstmt.executeQuery();
-    } catch (SQLException e) {
-        e.printStackTrace();
-        return null;
+        try {
+            PreparedStatement pstmt = connection.prepareStatement(query);
+            
+            int index = 1;
+            for (String group : userGroups) {
+                pstmt.setString(index++, group);
+            }
+            
+            return pstmt.executeQuery();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return null;
+        }
     }
-}
 
 
 
     public List<String> getAllUsers() {
-    List<String> users = new ArrayList<>();
-    String query = "SELECT username FROM users;";
-    try (Statement stmt = connection.createStatement();
-         ResultSet result = stmt.executeQuery(query)) {
-        while (result.next()) {
-            users.add(result.getString("username"));
+        List<String> users = new ArrayList<>();
+        String query = "SELECT username FROM users;";
+        try (Statement stmt = connection.createStatement();
+            ResultSet result = stmt.executeQuery(query)) {
+            while (result.next()) {
+                users.add(result.getString("username"));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
-    } catch (SQLException e) {
-        e.printStackTrace();
+        return users;
     }
-    return users;
-}
 
 
      public boolean createGroup(String groupName) {
             String query = "INSERT OR IGNORE INTO groups (groupname, groupmembers) VALUES (?, ?);";
             try (PreparedStatement pstmt = connection.prepareStatement(query)) {
                 pstmt.setString(1, groupName);
-                pstmt.setString(2, "");  // Initially no members in the group
+                pstmt.setString(2, "");
                 pstmt.executeUpdate();
                 return true;
             } catch (SQLException e) {
@@ -248,70 +235,61 @@ public ResultSet getGroupMessages(String username) {
             }
     }
 
-        // Add a member to a group
-        public boolean addMemberToGroup(String groupName, String username) {
-            String selectQuery = "SELECT groupmembers FROM groups WHERE groupname = ?;";
-            String updateQuery = "UPDATE groups SET groupmembers = ? WHERE groupname = ?;";
-            try {
-                // Get current members
-                String currentMembers;
-                try (PreparedStatement selectStmt = connection.prepareStatement(selectQuery)) {
-                    selectStmt.setString(1, groupName);
-                    ResultSet rs = selectStmt.executeQuery();
-                    if (rs.next()) {
-                        currentMembers = rs.getString("groupmembers");
-                    } else {
-                        return false; // Group does not exist
-                    }
+    public boolean addMemberToGroup(String groupName, String username) {
+        String selectQuery = "SELECT groupmembers FROM groups WHERE groupname = ?;";
+        String updateQuery = "UPDATE groups SET groupmembers = ? WHERE groupname = ?;";
+        try {
+            String currentMembers;
+            try (PreparedStatement selectStmt = connection.prepareStatement(selectQuery)) {
+                selectStmt.setString(1, groupName);
+                ResultSet rs = selectStmt.executeQuery();
+                if (rs.next()) {
+                    currentMembers = rs.getString("groupmembers");
+                } else {
+                    return false;
                 }
-
-                // Update members list
-                String updatedMembers = currentMembers.isEmpty() ? username : currentMembers + "," + username;
-                try (PreparedStatement updateStmt = connection.prepareStatement(updateQuery)) {
-                    updateStmt.setString(1, updatedMembers);
-                    updateStmt.setString(2, groupName);
-                    updateStmt.executeUpdate();
-                }
-                return true;
-            } catch (SQLException e) {
-                e.printStackTrace();
-                return false;
             }
-        }
-
-        // Remove a member from a group
-        public boolean removeMemberFromGroup(String groupName, String username) {
-            String selectQuery = "SELECT groupmembers FROM groups WHERE groupname = ?;";
-            String updateQuery = "UPDATE groups SET groupmembers = ? WHERE groupname = ?;";
-            try {
-                // Get current members
-                String currentMembers;
-                try (PreparedStatement selectStmt = connection.prepareStatement(selectQuery)) {
-                    selectStmt.setString(1, groupName);
-                    ResultSet rs = selectStmt.executeQuery();
-                    if (rs.next()) {
-                        currentMembers = rs.getString("groupmembers");
-                    } else {
-                        return false; // Group does not exist
-                    }
-                }
-
-                // Update members list
-                List<String> membersList = new ArrayList<>(Arrays.asList(currentMembers.split(",")));
-                membersList.remove(username);
-                String updatedMembers = String.join(",", membersList);
-
-                try (PreparedStatement updateStmt = connection.prepareStatement(updateQuery)) {
-                    updateStmt.setString(1, updatedMembers);
-                    updateStmt.setString(2, groupName);
-                    updateStmt.executeUpdate();
-                }
-                return true;
-            } catch (SQLException e) {
-                e.printStackTrace();
-                return false;
+            String updatedMembers = currentMembers.isEmpty() ? username : currentMembers + "," + username;
+            try (PreparedStatement updateStmt = connection.prepareStatement(updateQuery)) {
+                updateStmt.setString(1, updatedMembers);
+                updateStmt.setString(2, groupName);
+                updateStmt.executeUpdate();
             }
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
         }
+    }
+    public boolean removeMemberFromGroup(String groupName, String username) {
+        String selectQuery = "SELECT groupmembers FROM groups WHERE groupname = ?;";
+        String updateQuery = "UPDATE groups SET groupmembers = ? WHERE groupname = ?;";
+        try {
+            String currentMembers;
+            try (PreparedStatement selectStmt = connection.prepareStatement(selectQuery)) {
+                selectStmt.setString(1, groupName);
+                ResultSet rs = selectStmt.executeQuery();
+                if (rs.next()) {
+                    currentMembers = rs.getString("groupmembers");
+                } else {
+                    return false;
+                }
+            }
+            List<String> membersList = new ArrayList<>(Arrays.asList(currentMembers.split(",")));
+            membersList.remove(username);
+            String updatedMembers = String.join(",", membersList);
+
+            try (PreparedStatement updateStmt = connection.prepareStatement(updateQuery)) {
+                updateStmt.setString(1, updatedMembers);
+                updateStmt.setString(2, groupName);
+                updateStmt.executeUpdate();
+            }
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
 
     public void close() {
         try {
@@ -331,70 +309,62 @@ public class ChatServer {
     private static Map<String, Set<ClientHandler>> groups = new HashMap<>();
     private static DatabaseHelper dbHelper = new DatabaseHelper();
 
-  public static void main(String[] args) {
-    int port = 8000;
-    String localIPAddress = "10.17.235.2";
-    
-    // Initialize clientHandlers from the database
-    List<String> users = dbHelper.getAllUsers();
-    System.out.println(users);
-    for (String username : users) {
-        ClientHandler dummyClientHandler = new ClientHandler(null, clientHandlers, groups, dbHelper);
-        dummyClientHandler.setClientName(username);  // Set the client name
-        clientHandlers.add(dummyClientHandler);
-    }
-    List<String> groupNames = dbHelper.getGroupNames(); // Fetch group names from the database
-
-    for (String groupName : groupNames) {
-        groups.put(groupName, new HashSet<>()); // Initialize each group with an empty set of ClientHandlers
-    }
-
-    try (ServerSocket serverSocket = new ServerSocket(port, 50, InetAddress.getByName(localIPAddress))) {
-        System.out.println("Server is listening on IP " + localIPAddress + " and port " + port);
-
-        while (true) {
-            Socket socket = serverSocket.accept();
-            System.out.println("New client connected");
-            ClientHandler clientHandler = new ClientHandler(socket, clientHandlers, groups, dbHelper);
-            clientHandler.setClientName(" ");
-            clientHandlers.add(clientHandler);
-            new Thread(clientHandler).start();
+    public static void main(String[] args) {
+        int port = 8000;
+        String localIPAddress = "10.17.235.2";
+      
+        List<String> users = dbHelper.getAllUsers();
+        // System.out.println(users);
+        for (String username : users) {
+            ClientHandler dummyClientHandler = new ClientHandler(null, clientHandlers, groups, dbHelper);
+            dummyClientHandler.setClientName(username);
+            clientHandlers.add(dummyClientHandler);
         }
-    } catch (IOException e) {
-        e.printStackTrace();
+        List<String> groupNames = dbHelper.getGroupNames();
+
+        for (String groupName : groupNames) {
+            groups.put(groupName, new HashSet<>());
+        }
+
+        try (ServerSocket serverSocket = new ServerSocket(port, 50, InetAddress.getByName(localIPAddress))) {
+            System.out.println("Server is listening on IP " + localIPAddress + " and port " + port);
+
+            while (true) {
+                Socket socket = serverSocket.accept();
+                System.out.println("New client connected");
+                ClientHandler clientHandler = new ClientHandler(socket, clientHandlers, groups, dbHelper);
+                clientHandler.setClientName(" ");
+                clientHandlers.add(clientHandler);
+                new Thread(clientHandler).start();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
-}
 
     static void removeClient(String username) {
-    Iterator<ClientHandler> iterator = clientHandlers.iterator();
-    while (iterator.hasNext()) {
-        ClientHandler client = iterator.next();
-        if (client.getClientName() != null && client.getClientName().equals(username)) {
-            iterator.remove(); // Safely remove the client
-            break; // Exit after finding and removing the client
+        Iterator<ClientHandler> iterator = clientHandlers.iterator();
+        while (iterator.hasNext()) {
+            ClientHandler client = iterator.next();
+            if (client.getClientName() != null && client.getClientName().equals(username)) {
+                iterator.remove();
+                break;
+            }
         }
     }
-}
 
-
-
-    // Broadcast updated user list to all clients
     static void broadcastUserList() {
         StringBuilder userList = new StringBuilder("/userlist ");
         for (ClientHandler client : clientHandlers) {
             if (client.getClientName() != null) {
                 if (client.socket == null) {
-                    // System.out.println("offline,");
                     userList.append(client.getClientName() + ":offline").append(",");
                 } else if(client.socket.isConnected() && !client.socket.isClosed()){
-                    // System.out.println("online,");
                     userList.append(client.getClientName() + ":online").append(",");
                 }
                 else{
-                    // System.out.println("offline,");
                     userList.append(client.getClientName() + ":offline").append(",");
                 }
-                // userList.append(client.getClientName()).append(",");
             }
         }
         String userListMessage = userList.toString();
@@ -405,7 +375,6 @@ public class ChatServer {
         }
     }
 
-    // Broadcast updated group list to all clients
     static void broadcastGroupList() {
         StringBuilder groupList = new StringBuilder("/grouplist ");
         for (String groupName : groups.keySet()) {
@@ -447,20 +416,15 @@ class ClientHandler implements Runnable {
             out = new PrintWriter(socket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-            // Ask for username and password
             out.println("Enter your username:");
             String username = in.readLine();
             out.println("Enter your password:");
             String password = in.readLine();
 
-            // ChatServer.removeClient(username);
-
-            // Check user authentication or register if new user
             if (dbHelper.authenticateUser(username, password)) {
                 ChatServer.removeClient(username);
                 clientName = username;
                 out.println("Welcome back, " + clientName + "!");
-                // Retrieve and display chat history
                 joinUserToGroups();
                 displayChatHistory(username);
             } else if (dbHelper.addUser(username, password)) {
@@ -480,7 +444,7 @@ class ClientHandler implements Runnable {
 
             String message;
             while ((message = in.readLine()) != null) {
-                System.out.println("main handler: "+ message);
+                // System.out.println("main handler: "+ message);
                 if (message.startsWith("Private to")) {
                     String fullMessage = clientName + ": " + message;
                     handlePrivateMessage(fullMessage);
@@ -495,7 +459,7 @@ class ClientHandler implements Runnable {
                 } else {
                     String fullMessage = message;
                     broadcast(fullMessage, this);
-                    dbHelper.saveMessage(clientName, null, null, fullMessage); // Save public message
+                    dbHelper.saveMessage(clientName, null, null, fullMessage);
                 }
             }
         } catch (IOException e) {
@@ -505,16 +469,13 @@ class ClientHandler implements Runnable {
         }
     }
     public void joinUserToGroups() {
-        List<String> userGroups = dbHelper.getUserGroups(clientName); // Retrieve the groups for this user
-        System.out.println("usergrps: "+ userGroups);
+        List<String> userGroups = dbHelper.getUserGroups(clientName);
+        // System.out.println("usergrps: "+ userGroups);
         for (String group : userGroups) {
-            // Check if the group exists in the groups map, then add the user to it
             groups.computeIfPresent(group, (key, members) -> {
-                members.add(this); // Add the ClientHandler instance to the set
+                members.add(this);
                 return members;
             });
-            // System.out.println("System groups: "+ groups);
-            // groups.get(group).add(this);
         }
         out.println("/joinedGroups "+ String.join(", ", userGroups));
     }
@@ -534,106 +495,89 @@ class ClientHandler implements Runnable {
     }
     
     private void handleImageReceptionGroup(String message) {
-     try {
-        // Split the message into header and base64 data
-        String[] parts = message.split(":", 2); // Split message into two parts: header and base64 data
-        String header = parts[0];
-        String base64ImageData = parts[1];
+        try {
+            String[] parts = message.split(":", 2);
+            String header = parts[0];
+            String base64ImageData = parts[1];
 
-        // Parse the header for metadata (sender, recipient, filename, etc.)
-        String[] tokens = header.split(" ");
-        String sender = tokens[1];
-        String recipient = tokens[2];
-        String fileName = tokens[3];
+            String[] tokens = header.split(" ");
+            String sender = tokens[1];
+            String recipient = tokens[2];
+            String fileName = tokens[3];
 
-        // Find recipient client handler
-        if (groups.containsKey(recipient)) {
-            for (ClientHandler client : groups.get(recipient)) {
-                if(client != this){
-                    ClientHandler recipientHandler = client;
-                    if (recipientHandler == null || recipientHandler.socket == null) {
-                        System.out.println("Recipient not connected.");
-                        continue;
+            if (groups.containsKey(recipient)) {
+                for (ClientHandler client : groups.get(recipient)) {
+                    if(client != this){
+                        ClientHandler recipientHandler = client;
+                        if (recipientHandler == null || recipientHandler.socket == null) {
+                            // System.out.println("Recipient not connected.");
+                            continue;
+                        }
+
+                        String fullMessage = header + ":" + base64ImageData;
+
+                        PrintWriter recipientOut = new PrintWriter(recipientHandler.socket.getOutputStream(), true);
+                        recipientOut.println(fullMessage);
+                        recipientOut.flush();
+
+                        // System.out.println("Image forwarded to recipient: " + recipient);
                     }
-
-                    String fullMessage = header + ":" + base64ImageData;
-
-                    // Forward the complete message (header + base64 data) to the recipient
-                    PrintWriter recipientOut = new PrintWriter(recipientHandler.socket.getOutputStream(), true);
-                    recipientOut.println(fullMessage);  // Send header and base64 image data together
-                    recipientOut.flush();
-
-                    System.out.println("Image forwarded to recipient: " + recipient);
                 }
+            } else {
+                out.println("Group " + recipient + " does not exist.");
             }
-        } else {
-            out.println("Group " + recipient + " does not exist.");
+
+            String msg = sender + ": Group "+recipient+": @imagedata|"+base64ImageData;
+
+            dbHelper.saveMessage(clientName, null, recipient, msg);
+        } catch (IOException e) {
+            // System.out.println("Error receiving or forwarding base64 image.");
+            e.printStackTrace();
         }
 
-        String msg = sender + ": Group "+recipient+": @imagedata|"+base64ImageData;
-
-        dbHelper.saveMessage(clientName, null, recipient, msg);
-
-        // Combine the header and image data into one message for forwarding
-        
-        
-    } catch (IOException e) {
-        System.out.println("Error receiving or forwarding base64 image.");
-        e.printStackTrace();
     }
 
-}
+    private void handleImageReception(String message) {
+        try {
+            String[] parts = message.split(":", 2);
+            String header = parts[0];
+            String base64ImageData = parts[1];
 
- private void handleImageReception(String message) {
-     try {
-        // Split the message into header and base64 data
-        String[] parts = message.split(":", 2); // Split message into two parts: header and base64 data
-        String header = parts[0];
-        String base64ImageData = parts[1];
+            String[] tokens = header.split(" ");
+            String sender = tokens[1];
+            String recipient = tokens[2];
+            String fileName = tokens[3];
 
-        // Parse the header for metadata (sender, recipient, filename, etc.)
-        String[] tokens = header.split(" ");
-        String sender = tokens[1];
-        String recipient = tokens[2];
-        String fileName = tokens[3];
+            ClientHandler recipientHandler = findClientByName(recipient);
+            if (recipientHandler == null || recipientHandler.socket == null) {
+                // System.out.println("Recipient not connected.");
+                return;
+            }
 
-        // Find recipient client handler
-        ClientHandler recipientHandler = findClientByName(recipient);
-        if (recipientHandler == null || recipientHandler.socket == null) {
-            System.out.println("Recipient not connected.");
-            return;
+            String msg = sender + ": Private to "+recipient+": @imagedata|"+base64ImageData;
+
+            dbHelper.saveMessage(clientName, recipient, null, msg);
+            String fullMessage = header + ":" + base64ImageData;
+            PrintWriter recipientOut = new PrintWriter(recipientHandler.socket.getOutputStream(), true);
+            recipientOut.println(fullMessage);
+            recipientOut.flush();
+            // System.out.println("Image forwarded to recipient: " + recipient); 
+        } catch (IOException e) {
+            // System.out.println("Error receiving or forwarding base64 image.");
+            e.printStackTrace();
         }
 
-        String msg = sender + ": Private to "+recipient+": @imagedata|"+base64ImageData;
-
-        dbHelper.saveMessage(clientName, recipient, null, msg);
-
-        // Combine the header and image data into one message for forwarding
-        String fullMessage = header + ":" + base64ImageData;
-
-        // Forward the complete message (header + base64 data) to the recipient
-        PrintWriter recipientOut = new PrintWriter(recipientHandler.socket.getOutputStream(), true);
-        recipientOut.println(fullMessage);  // Send header and base64 image data together
-        recipientOut.flush();
-
-        System.out.println("Image forwarded to recipient: " + recipient);
-        
-    } catch (IOException e) {
-        System.out.println("Error receiving or forwarding base64 image.");
-        e.printStackTrace();
     }
-
-}
 
 
     private ClientHandler findClientByName(String name) {
-    for (ClientHandler client : clientHandlers) {
-        if (client.clientName.equals(name)) {
-            return client;
+        for (ClientHandler client : clientHandlers) {
+            if (client.clientName.equals(name)) {
+                return client;
+            }
         }
+        return null;
     }
-    return null;
-}
 
     private String formatMessage(String sender, String recipient, String group, String content) {
         if (group != null) {
@@ -646,20 +590,18 @@ class ClientHandler implements Runnable {
     }
 
     private void handlePrivateMessage(String message) {
-        System.out.println(message);
+        // System.out.println(message);
         String[] senderSplit = message.split(":", 2); 
-        String remainingMessage = senderSplit[1].trim(); // "Private to dev: sdfkjnfds redo this"
+        String remainingMessage = senderSplit[1].trim();
 
-        // Step 2: Split by "Private to" to isolate recipient and message
         String[] privateSplit = remainingMessage.split("Private to", 2);
-        String recipientPart = privateSplit[1].trim(); // "dev: sdfkjnfds redo this"
+        String recipientPart = privateSplit[1].trim();
 
-        // Step 3: Split by ":" to get recipient and actual message
         String[] recipientAndMessage = recipientPart.split(":", 2);
 
-        String recipientName = recipientAndMessage[0].trim(); // "dev"
-        String privateMessage = recipientAndMessage[1].trim(); // "sdfkjnfds redo this"
-        System.out.println(recipientName+privateMessage);
+        String recipientName = recipientAndMessage[0].trim();
+        String privateMessage = recipientAndMessage[1].trim();
+        // System.out.println(recipientName+privateMessage);
         sendPrivateMessage(recipientName, message);
     }
 
@@ -681,7 +623,7 @@ class ClientHandler implements Runnable {
                 out.println("Invalid group command");
         }
 
-        System.out.println("System groups: "+ groups);
+        // System.out.println("System groups: "+ groups);
     }
 
     private void createGroup(String groupName) {
@@ -759,20 +701,18 @@ class ClientHandler implements Runnable {
         out.println("User " + recipientName + " not found.");
     }
 
-  public void broadcast(String message, ClientHandler excludeClient) {
-    for (ClientHandler clientHandler : clientHandlers) {
-        if (clientHandler.out != null) {  // Only broadcast to active clients
-            clientHandler.out.println(message);
-            clientHandler.out.flush();
+    public void broadcast(String message, ClientHandler excludeClient) {
+        for (ClientHandler clientHandler : clientHandlers) {
+            if (clientHandler.out != null) {  // Only broadcast to active clients
+                clientHandler.out.println(message);
+                clientHandler.out.flush();
+            }
         }
     }
-}
 
 
     private void closeConnection() {
         try {
-            // clientHandlers.remove(this);
-            // this.socket
             socket.close();
             broadcast(clientName + " has left the chat", null);
             ChatServer.broadcastUserList();
