@@ -497,14 +497,6 @@ class ClientHandler implements Runnable {
                     broadcast(fullMessage, this);
                     dbHelper.saveMessage(clientName, null, null, fullMessage); // Save public message
                 }
-                // Inside the run() method or message-handling logic
-                if (message.startsWith("/sendfile")) {
-                    String[] tokens = message.split(" ", 2);
-                    String fileName = tokens[1];
-                    out.println("Ready to receive file: " + fileName);
-                    handleFileTransfer(fileName);
-}
-
             }
         } catch (IOException e) {
             e.printStackTrace();
