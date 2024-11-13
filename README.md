@@ -1,8 +1,8 @@
 ## Chat application in Java
 
-# link to github repository <a href="https://github.com/harsh-agr79/chatAppJava"> Link </a>
+# link to github repository <a href="https://github.com/harsh-agr79/chatAppJava/tree/img2"> Link </a>
 
-https://github.com/harsh-agr79/chatAppJava
+https://github.com/harsh-agr79/chatAppJava/tree/img2
 
 # How to run the server
 
