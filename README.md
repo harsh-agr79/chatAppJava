@@ -19,6 +19,10 @@ after compilation the following statement is to be used to run the server
 
 to make this whole process easier you can run the cs.bat file by clicking on it or using the terminal compilationa and execution of the server will automatically start.
 
+Alternatively
+
+```./cs.bat```
+
 =========================================================================
 
 # How to run the client
@@ -41,3 +45,7 @@ Now to run the program run the following command
 ```java --module-path libs/javafx-sdk-23/lib --add-modules javafx.controls,javafx.fxml -cp build ChatClient```
 
 To make all of this process easy we have created a batch file run.bat to execute all the compilation and running commands we can run it by clicking on the run.bat or we can execute it in the terminal.
+
+Alternatively
+
+```./run.bat```
