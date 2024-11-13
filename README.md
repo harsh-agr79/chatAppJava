@@ -19,7 +19,7 @@ after compilation the following statement is to be used to run the server
 
 to make this whole process easier you can run the cs.bat file by clicking on it or using the terminal compilationa and execution of the server will automatically start.
 
-==================================================
+=========================================================================
 
 # How to run the client
 Before running the main client side application it is mandatory to change ip addresses and match the ip addresses in the client and the server side and the server should be started before the client because the client will throw an error and not run incase it is not able to connect to the server which will occur in case
